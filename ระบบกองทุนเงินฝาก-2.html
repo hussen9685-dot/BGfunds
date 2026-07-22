@@ -1,0 +1,1138 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>ระบบกองทุนเงินฝาก</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<style>
+  :root{
+    --green-900:#12432c;
+    --green-700:#1f6f4a;
+    --green-500:#2f9463;
+    --green-200:#c9e8d7;
+    --green-100:#e8f5ee;
+    --bg:#f4f6f5;
+    --white:#ffffff;
+    --border:#e0e5e1;
+    --text:#1d2b24;
+    --text-muted:#6b7d74;
+    --danger:#b3392c;
+    --danger-bg:#fbe9e6;
+    --radius:12px;
+    --shadow:0 1px 2px rgba(18,67,44,.06), 0 4px 16px rgba(18,67,44,.05);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:'Sarabun',sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    -webkit-font-smoothing:antialiased;
+  }
+  button, input, select{font-family:inherit;}
+  a{color:inherit;}
+
+  /* ---------- Login ---------- */
+  #loginScreen{
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:
+      linear-gradient(180deg, var(--green-900) 0%, var(--green-700) 55%, var(--green-500) 100%);
+    padding:20px;
+  }
+  .login-card{
+    background:var(--white);
+    border-radius:var(--radius);
+    width:100%;
+    max-width:380px;
+    padding:36px 30px 28px;
+    box-shadow:0 20px 60px rgba(0,0,0,.25);
+    position:relative;
+    overflow:hidden;
+  }
+  .login-card::before{
+    content:"";
+    position:absolute; top:0; left:0; right:0; height:6px;
+    background:repeating-linear-gradient(90deg, var(--green-700) 0 10px, transparent 10px 18px);
+    opacity:.5;
+  }
+  .login-logo{
+    width:56px;height:56px;border-radius:50%;
+    background:var(--green-100);
+    display:flex;align-items:center;justify-content:center;
+    margin:0 auto 14px;
+    font-size:26px;
+    overflow:hidden; background-size:cover; background-position:center;
+  }
+  .logo-upload-row{display:flex; align-items:center; gap:16px; margin-bottom:6px;}
+  .logo-preview{
+    width:72px;height:72px;border-radius:50%;
+    background:var(--green-100); border:1.5px solid var(--border);
+    display:flex;align-items:center;justify-content:center;
+    font-size:30px; flex-shrink:0; overflow:hidden;
+    background-size:cover; background-position:center;
+  }
+  .logo-upload-actions{display:flex; flex-direction:column; gap:8px;}
+  .file-input-label{
+    display:inline-flex; align-items:center; gap:6px; cursor:pointer;
+    font-size:13px; font-weight:600; color:var(--green-700);
+    border:1.5px solid var(--green-700); border-radius:9px; padding:8px 14px;
+    background:var(--white); width:fit-content;
+  }
+  .file-input-label:hover{background:var(--green-100);}
+  .file-input-label input{display:none;}
+  .login-title{text-align:center;font-weight:700;font-size:20px;margin:0 0 4px;color:var(--green-900);}
+  .login-sub{text-align:center;color:var(--text-muted);font-size:13.5px;margin:0 0 22px;}
+  .field{margin-bottom:14px;}
+  .field label{display:block;font-size:13px;color:var(--text-muted);margin-bottom:6px;font-weight:500;}
+  .field input, .field select, .field textarea{
+    width:100%;
+    padding:11px 12px;
+    border:1.5px solid var(--border);
+    border-radius:9px;
+    font-size:14.5px;
+    background:var(--white);
+    outline:none;
+    transition:border-color .15s;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus{border-color:var(--green-500);}
+  .btn{
+    display:inline-flex; align-items:center; justify-content:center; gap:6px;
+    border:none; border-radius:9px; padding:11px 18px;
+    font-size:14.5px; font-weight:600; cursor:pointer;
+    transition:background .15s, transform .05s;
+  }
+  .btn:active{transform:scale(.98);}
+  .btn-primary{background:var(--green-700); color:#fff; width:100%;}
+  .btn-primary:hover{background:var(--green-900);}
+  .btn-outline{background:var(--white); color:var(--green-700); border:1.5px solid var(--green-700);}
+  .btn-outline:hover{background:var(--green-100);}
+  .btn-danger{background:var(--danger-bg); color:var(--danger);}
+  .btn-danger:hover{background:#f6d3cd;}
+  .btn-ghost{background:transparent; color:var(--text-muted); padding:8px 10px;}
+  .btn-ghost:hover{color:var(--text);}
+  .btn-sm{padding:7px 12px;font-size:13px;}
+  .login-hint{
+    margin-top:16px; text-align:center; font-size:12px; color:var(--text-muted);
+    background:var(--green-100); border-radius:8px; padding:10px;
+  }
+  .login-error{
+    background:var(--danger-bg); color:var(--danger); font-size:13px;
+    padding:9px 12px; border-radius:8px; margin-bottom:14px; display:none;
+  }
+
+  /* ---------- App shell ---------- */
+  #app{display:none; min-height:100vh;}
+  .shell{display:flex; min-height:100vh;}
+
+  .sidebar{
+    width:230px; flex-shrink:0;
+    background:var(--green-900);
+    color:#eaf3ee;
+    display:flex; flex-direction:column;
+    position:fixed; top:0; bottom:0; left:0;
+    z-index:40;
+    transition:transform .2s ease;
+  }
+  .brand{
+    display:flex; align-items:center; gap:10px;
+    padding:20px 18px 16px;
+  }
+  .brand-icon{
+    width:38px;height:38px;border-radius:50%;
+    background:var(--green-500);
+    display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;
+    overflow:hidden; background-size:cover; background-position:center;
+  }
+  .brand-name{font-weight:700; font-size:15px; line-height:1.25; word-break:break-word;}
+  .brand-sub{font-size:11px; color:#a9c7b7;}
+  .sidebar-stitch{
+    margin:0 18px 10px;
+    border-top:1.5px dashed rgba(234,243,238,.25);
+  }
+  .nav{flex:1; padding:6px 10px; overflow-y:auto;}
+  .nav-item{
+    display:flex; align-items:center; gap:11px;
+    padding:11px 12px; border-radius:9px;
+    color:#d3e6dc; font-size:14.5px; font-weight:500;
+    cursor:pointer; margin-bottom:2px;
+    text-decoration:none;
+  }
+  .nav-item .ico{font-size:17px; width:20px; text-align:center;}
+  .nav-item:hover{background:rgba(255,255,255,.06);}
+  .nav-item.active{background:var(--green-500); color:#fff;}
+  .sidebar-foot{
+    padding:14px 18px 20px;
+    border-top:1px solid rgba(255,255,255,.08);
+    font-size:12.5px;
+  }
+  .userchip{display:flex; align-items:center; gap:9px; margin-bottom:10px;}
+  .userchip-av{
+    width:30px;height:30px;border-radius:50%;
+    background:var(--green-500); display:flex;align-items:center;justify-content:center;
+    font-size:13px; font-weight:700; flex-shrink:0;
+  }
+  .userchip-name{font-weight:600; color:#fff;}
+  .userchip-role{color:#a9c7b7; font-size:11px;}
+  .logout-link{color:#f2c4bb; cursor:pointer; font-size:12.5px;}
+  .logout-link:hover{text-decoration:underline;}
+
+  .topbar{
+    display:none;
+    align-items:center; justify-content:space-between;
+    background:var(--white); border-bottom:1px solid var(--border);
+    padding:12px 16px; position:sticky; top:0; z-index:30;
+  }
+  .hamburger{
+    background:none;border:none;font-size:22px;cursor:pointer;color:var(--green-900);
+    padding:4px 8px;
+  }
+  .topbar-title{font-weight:700; font-size:15px;}
+
+  .main{
+    margin-left:230px;
+    flex:1; padding:26px 30px 60px;
+    max-width:1180px;
+  }
+  .page-header{
+    display:flex; align-items:center; justify-content:space-between;
+    flex-wrap:wrap; gap:12px;
+    margin-bottom:18px;
+  }
+  .page-title{font-size:21px; font-weight:700; color:var(--green-900); margin:0;}
+  .page-title-sub{font-size:13px; color:var(--text-muted); margin-top:2px;}
+  .page-divider{
+    border:none; border-top:1.5px dashed var(--border); margin:0 0 22px;
+  }
+
+  .grid-cards{
+    display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:22px;
+  }
+  .card{
+    background:var(--white); border:1px solid var(--border); border-radius:var(--radius);
+    padding:16px 18px; box-shadow:var(--shadow);
+  }
+  .card-label{font-size:12.5px; color:var(--text-muted); font-weight:500; margin-bottom:6px;}
+  .card-value{font-size:22px; font-weight:700; color:var(--green-900);}
+  .card-value.small{font-size:18px;}
+  .panel{
+    background:var(--white); border:1px solid var(--border); border-radius:var(--radius);
+    box-shadow:var(--shadow); margin-bottom:20px; overflow:hidden;
+  }
+  .panel-head{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:15px 18px; border-bottom:1px solid var(--border); flex-wrap:wrap; gap:10px;
+  }
+  .panel-head h3{margin:0; font-size:15.5px; font-weight:700;}
+  .panel-body{padding:6px 18px 16px;}
+
+  table{width:100%; border-collapse:collapse; font-size:13.8px;}
+  thead th{
+    text-align:left; font-size:12px; color:var(--text-muted); font-weight:600;
+    padding:10px 10px; border-bottom:1.5px solid var(--border); white-space:nowrap;
+  }
+  tbody td{padding:11px 10px; border-bottom:1px solid var(--border); vertical-align:middle;}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:hover{background:var(--green-100);}
+  .num{text-align:right; font-variant-numeric:tabular-nums;}
+  .badge{
+    display:inline-block; font-size:11.5px; font-weight:600; padding:3px 9px; border-radius:20px;
+  }
+  .badge-green{background:var(--green-100); color:var(--green-700);}
+  .badge-gray{background:#eef1ef; color:var(--text-muted);}
+  .rank{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:22px;height:22px;border-radius:50%; background:var(--green-100); color:var(--green-700);
+    font-size:11.5px; font-weight:700; margin-right:8px;
+  }
+  .empty-state{
+    text-align:center; padding:40px 20px; color:var(--text-muted); font-size:13.5px;
+  }
+  .empty-state .e-ico{font-size:30px; margin-bottom:8px;}
+
+  .toolbar{display:flex; gap:10px; flex-wrap:wrap; align-items:center;}
+  .search-box{
+    display:flex; align-items:center; gap:8px;
+    border:1.5px solid var(--border); border-radius:9px; padding:8px 12px;
+    background:var(--bg); min-width:220px;
+  }
+  .search-box input{border:none; background:transparent; outline:none; font-size:13.8px; width:100%;}
+
+  .link-btn{color:var(--green-700); font-weight:600; cursor:pointer; font-size:13px;}
+  .link-btn:hover{text-decoration:underline;}
+
+  /* Modal */
+  .modal-overlay{
+    display:none; position:fixed; inset:0; background:rgba(18,30,24,.45);
+    z-index:100; align-items:flex-start; justify-content:center; padding:40px 16px; overflow-y:auto;
+  }
+  .modal-overlay.show{display:flex;}
+  .modal{
+    background:var(--white); border-radius:var(--radius); width:100%; max-width:480px;
+    box-shadow:0 20px 60px rgba(0,0,0,.3);
+  }
+  .modal-head{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:16px 20px; border-bottom:1px solid var(--border);
+  }
+  .modal-head h3{margin:0; font-size:16px;}
+  .modal-close{background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-muted);}
+  .modal-body{padding:18px 20px;}
+  .modal-foot{padding:14px 20px; border-top:1px solid var(--border); display:flex; justify-content:flex-end; gap:10px;}
+  .row-2{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+
+  .toast{
+    position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px);
+    background:var(--green-900); color:#fff; padding:12px 20px; border-radius:9px;
+    font-size:13.8px; box-shadow:0 8px 24px rgba(0,0,0,.25);
+    z-index:200; opacity:0; pointer-events:none; transition:all .25s ease;
+    display:flex; align-items:center; gap:8px;
+  }
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+  .toast.err{background:var(--danger);}
+
+  .tabs{display:flex; gap:6px; border-bottom:1px solid var(--border); margin-bottom:16px; flex-wrap:wrap;}
+  .tab{padding:9px 14px; font-size:13.8px; font-weight:600; color:var(--text-muted); cursor:pointer; border-bottom:2.5px solid transparent;}
+  .tab.active{color:var(--green-700); border-color:var(--green-700);}
+
+  .sidebar-backdrop{display:none; position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:39;}
+  .sidebar-backdrop.show{display:block;}
+
+  @media (max-width: 900px){
+    .grid-cards{grid-template-columns:repeat(2,1fr);}
+  }
+  @media (max-width: 760px){
+    .sidebar{transform:translateX(-100%);}
+    .sidebar.open{transform:translateX(0);}
+    .main{margin-left:0; padding:16px 14px 50px;}
+    .topbar{display:flex;}
+    .grid-cards{grid-template-columns:repeat(2,1fr); gap:10px;}
+    .row-2{grid-template-columns:1fr;}
+    .panel-body{padding:6px 12px 14px;}
+    thead{display:none;}
+    table, tbody, tr, td{display:block; width:100%;}
+    tbody tr{
+      border:1px solid var(--border); border-radius:10px; margin-bottom:10px; padding:8px 4px;
+    }
+    tbody td{border:none; padding:6px 10px; display:flex; justify-content:space-between; gap:10px;}
+    tbody td::before{content:attr(data-label); color:var(--text-muted); font-size:12px; font-weight:600;}
+    tbody td.no-label::before{display:none;}
+    .num{text-align:right;}
+  }
+</style>
+</head>
+<body>
+
+<!-- ================= LOGIN ================= -->
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="login-logo" id="loginLogo">🌿</div>
+    <h1 class="login-title" id="loginFundName">ระบบกองทุนเงินฝาก</h1>
+    <p class="login-sub">เข้าสู่ระบบเพื่อจัดการข้อมูลกองทุน</p>
+    <div id="loginConnecting" style="text-align:center; padding:18px 0; color:var(--text-muted); font-size:13.8px;">
+      ⏳ กำลังเชื่อมต่อฐานข้อมูล...
+    </div>
+    <div id="loginFormWrap" style="display:none;">
+      <div class="login-error" id="loginError">ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง</div>
+      <div class="field">
+        <label>ชื่อผู้ใช้</label>
+        <input type="text" id="loginUser" placeholder="กรอกชื่อผู้ใช้" autocomplete="username">
+      </div>
+      <div class="field">
+        <label>รหัสผ่าน</label>
+        <input type="password" id="loginPass" placeholder="กรอกรหัสผ่าน" autocomplete="current-password">
+      </div>
+      <button class="btn btn-primary" onclick="doLogin()">เข้าสู่ระบบ</button>
+      <div class="login-hint">บัญชีเริ่มต้น: <b>admin</b> / <b>admin123</b></div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= APP ================= -->
+<div id="app">
+  <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="toggleSidebar(false)"></div>
+  <div class="shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand-icon" id="sbLogo">🌿</div>
+        <div>
+          <div class="brand-name" id="sbFundName">ระบบกองทุนเงินฝาก</div>
+          <div class="brand-sub">บันทึกเงินฝากชุมชน</div>
+        </div>
+      </div>
+      <div class="sidebar-stitch"></div>
+      <nav class="nav" id="navList"></nav>
+      <div class="sidebar-foot">
+        <div class="userchip">
+          <div class="userchip-av" id="userAvatar">A</div>
+          <div>
+            <div class="userchip-name" id="userNameLabel">-</div>
+            <div class="userchip-role" id="userRoleLabel">-</div>
+          </div>
+        </div>
+        <span class="logout-link" onclick="doLogout()">ออกจากระบบ →</span>
+      </div>
+    </aside>
+
+    <div style="flex:1;">
+      <div class="topbar">
+        <button class="hamburger" onclick="toggleSidebar(true)">☰</button>
+        <div class="topbar-title" id="topbarTitle">Dashboard</div>
+        <div style="width:30px;"></div>
+      </div>
+      <main class="main" id="mainContent"></main>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* =========================================================
+   ระบบกองทุนเงินฝาก — single-file app (Firebase Realtime Database backend)
+   Tables (RTDB paths): members, deposits, users, settings
+========================================================= */
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBot0U5JhsYNxgfMPcXSBcJvKOIPl0gE5M",
+  authDomain: "bg-funds-5b664.firebaseapp.com",
+  databaseURL: "https://bg-funds-5b664-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "bg-funds-5b664",
+  storageBucket: "bg-funds-5b664.firebasestorage.app",
+  messagingSenderId: "767903063015",
+  appId: "1:767903063015:web:fe82bf267e28a155843b42",
+  measurementId: "G-E6HZ4GFYWJ"
+};
+
+const SESSION_KEY = 'gf_session';
+let db, refMembers, refDeposits, refUsers, refSettings;
+let dataReady = false;
+
+function snapToArray(snap){
+  const v = snap.val();
+  return v ? Object.values(v) : [];
+}
+function arrayToKeyedObj(arr, keyFn){
+  const o = {};
+  arr.forEach(item => { const k = keyFn(item); if(k) o[k] = item; });
+  return o;
+}
+
+let state = {
+  members: [],
+  deposits: [],
+  users: [],
+  settings: {fundName:'ระบบกองทุนเงินฝาก', logo:'🌿', address:'', phone:''},
+  currentView: 'dashboard',
+  memberDetailId: null,
+};
+
+async function initFirebaseData(){
+  firebase.initializeApp(firebaseConfig);
+  db = firebase.database();
+  refMembers = db.ref('members');
+  refDeposits = db.ref('deposits');
+  refUsers = db.ref('users');
+  refSettings = db.ref('settings');
+
+  const [settingsSnap, usersSnap, membersSnap, depositsSnap] = await Promise.all([
+    refSettings.once('value'), refUsers.once('value'), refMembers.once('value'), refDeposits.once('value')
+  ]);
+
+  state.settings = settingsSnap.exists() ? settingsSnap.val() : state.settings;
+  if(!settingsSnap.exists()) await refSettings.set(state.settings);
+
+  if(usersSnap.exists()){
+    state.users = snapToArray(usersSnap);
+  }else{
+    state.users = [{username:'admin', password:'admin123', role:'Admin', displayName:'ผู้ดูแลระบบ'}];
+    await refUsers.set(arrayToKeyedObj(state.users, u=>u.username));
+  }
+  state.members = snapToArray(membersSnap);
+  state.deposits = snapToArray(depositsSnap);
+
+  // live sync: reflect changes made from other devices/tabs
+  refMembers.on('value', snap => { state.members = snapToArray(snap); onRemoteUpdate(); });
+  refDeposits.on('value', snap => { state.deposits = snapToArray(snap); onRemoteUpdate(); });
+  refUsers.on('value', snap => { state.users = snapToArray(snap); onRemoteUpdate(); });
+  refSettings.on('value', snap => { if(snap.exists()){ state.settings = snap.val(); applyBranding(); } onRemoteUpdate(); });
+}
+
+function onRemoteUpdate(){
+  if(!dataReady) return;
+  if(document.getElementById('app').style.display !== 'none'){
+    navigate(state.currentView, state.memberDetailId);
+  }
+}
+
+function persistSettings(){
+  refSettings.set(state.settings).catch(err => showToast('บันทึกไม่สำเร็จ: '+err.message, true));
+}
+
+/* ---------------- Utilities ---------------- */
+function fmtMoney(n){
+  n = Number(n)||0;
+  return n.toLocaleString('th-TH', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+function fmtDate(d){
+  if(!d) return '-';
+  const dt = new Date(d+'T00:00:00');
+  if(isNaN(dt)) return d;
+  const months=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  return `${dt.getDate()} ${months[dt.getMonth()]} ${dt.getFullYear()+543}`;
+}
+function todayISO(){
+  const d = new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function uid(prefix){ return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+function nextMemberCode(){
+  const n = state.members.length + 1;
+  return 'M' + String(n).padStart(4,'0');
+}
+function escapeHtml(s){
+  return (s||'').toString().replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function showToast(msg, isErr){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (isErr ? ' err':'');
+  clearTimeout(window._toastTimer);
+  window._toastTimer = setTimeout(()=> t.className = t.className.replace(' show',''), 2400);
+}
+
+/* ---------------- Auth ---------------- */
+function doLogin(){
+  const u = document.getElementById('loginUser').value.trim();
+  const p = document.getElementById('loginPass').value;
+  const found = state.users.find(x => x.username === u && x.password === p);
+  const errBox = document.getElementById('loginError');
+  if(!found){
+    errBox.style.display='block';
+    return;
+  }
+  errBox.style.display='none';
+  sessionStorage.setItem(SESSION_KEY, JSON.stringify({username:found.username, role:found.role, displayName:found.displayName||found.username}));
+  enterApp();
+}
+function currentUser(){
+  try{ return JSON.parse(sessionStorage.getItem(SESSION_KEY)); }catch(e){ return null; }
+}
+function doLogout(){
+  sessionStorage.removeItem(SESSION_KEY);
+  document.getElementById('app').style.display='none';
+  document.getElementById('loginScreen').style.display='flex';
+  document.getElementById('loginUser').value='';
+  document.getElementById('loginPass').value='';
+}
+function isAdmin(){
+  const u = currentUser();
+  return u && u.role === 'Admin';
+}
+
+function enterApp(){
+  document.getElementById('loginScreen').style.display='none';
+  document.getElementById('app').style.display='block';
+  applyBranding();
+  const u = currentUser();
+  document.getElementById('userNameLabel').textContent = u.displayName;
+  document.getElementById('userRoleLabel').textContent = u.role === 'Admin' ? 'ผู้ดูแลระบบ' : 'ผู้ใช้งาน';
+  document.getElementById('userAvatar').textContent = (u.displayName||'?').trim()[0]?.toUpperCase() || '?';
+  renderNav();
+  navigate('dashboard');
+}
+
+function isImageLogo(val){ return typeof val === 'string' && val.startsWith('data:image'); }
+function renderLogoInto(el, val){
+  if(isImageLogo(val)){
+    el.style.backgroundImage = `url(${val})`;
+    el.textContent = '';
+  }else{
+    el.style.backgroundImage = '';
+    el.textContent = val || '🌿';
+  }
+}
+function applyBranding(){
+  document.getElementById('loginFundName').textContent = state.settings.fundName || 'ระบบกองทุนเงินฝาก';
+  document.getElementById('sbFundName').textContent = state.settings.fundName || 'ระบบกองทุนเงินฝาก';
+  renderLogoInto(document.getElementById('loginLogo'), state.settings.logo);
+  renderLogoInto(document.getElementById('sbLogo'), state.settings.logo);
+}
+
+/* ---------------- Navigation ---------------- */
+const NAV_ITEMS = [
+  {id:'dashboard', label:'Dashboard', ico:'🏠'},
+  {id:'members', label:'สมาชิก', ico:'👥'},
+  {id:'deposit', label:'ฝากเงิน', ico:'💰'},
+  {id:'history', label:'ประวัติการฝาก', ico:'📜'},
+  {id:'reports', label:'รายงาน', ico:'📊'},
+  {id:'settings', label:'ตั้งค่าระบบ', ico:'⚙️'},
+];
+function renderNav(){
+  const nav = document.getElementById('navList');
+  nav.innerHTML = NAV_ITEMS.map(it => `
+    <div class="nav-item ${state.currentView===it.id?'active':''}" onclick="navigate('${it.id}')">
+      <span class="ico">${it.ico}</span><span>${it.label}</span>
+    </div>`).join('');
+}
+function toggleSidebar(open){
+  document.getElementById('sidebar').classList.toggle('open', open);
+  document.getElementById('sidebarBackdrop').classList.toggle('show', open);
+}
+function navigate(view, param){
+  state.currentView = view;
+  state.memberDetailId = param || null;
+  renderNav();
+  toggleSidebar(false);
+  const titleMap = Object.fromEntries(NAV_ITEMS.map(n=>[n.id,n.label]));
+  document.getElementById('topbarTitle').textContent = view==='memberDetail' ? 'รายละเอียดสมาชิก' : (titleMap[view] || '');
+  const renderers = {
+    dashboard: renderDashboard,
+    members: renderMembers,
+    memberDetail: renderMemberDetail,
+    deposit: renderDeposit,
+    history: renderHistory,
+    reports: renderReports,
+    settings: renderSettings,
+  };
+  (renderers[view] || renderDashboard)();
+  window.scrollTo(0,0);
+}
+
+/* ================= DASHBOARD ================= */
+function renderDashboard(){
+  const totalMembers = state.members.length;
+  const totalBalance = state.members.reduce((s,m)=>s+Number(m.balance||0),0);
+  const today = todayISO();
+  const todayCount = state.deposits.filter(d=>d.date===today).length;
+  const latest = [...state.deposits].sort((a,b)=> b.createdAt - a.createdAt).slice(0,10);
+  const topMembers = [...state.members].sort((a,b)=> (b.balance||0)-(a.balance||0)).slice(0,5);
+
+  document.getElementById('mainContent').innerHTML = `
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">ภาพรวมกองทุน</h1>
+        <div class="page-title-sub">สรุปข้อมูล ณ วันที่ ${fmtDate(today)}</div>
+      </div>
+    </div>
+    <hr class="page-divider">
+    <div class="grid-cards">
+      <div class="card"><div class="card-label">สมาชิกทั้งหมด</div><div class="card-value">${totalMembers.toLocaleString('th-TH')}</div></div>
+      <div class="card"><div class="card-label">ยอดเงินฝากรวม</div><div class="card-value small">${fmtMoney(totalBalance)} ฿</div></div>
+      <div class="card"><div class="card-label">รายการฝากวันนี้</div><div class="card-value">${todayCount.toLocaleString('th-TH')}</div></div>
+      <div class="card"><div class="card-label">จำนวนรายการทั้งหมด</div><div class="card-value">${state.deposits.length.toLocaleString('th-TH')}</div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>รายการฝากล่าสุด</h3><span class="link-btn" onclick="navigate('history')">ดูทั้งหมด →</span></div>
+      <div class="panel-body">
+        ${latest.length ? `<table><thead><tr><th>วันที่</th><th>สมาชิก</th><th>จำนวนเงิน</th><th>หมายเหตุ</th></tr></thead><tbody>
+          ${latest.map(d=>{
+            const m = state.members.find(x=>x.id===d.memberId);
+            return `<tr>
+              <td data-label="วันที่">${fmtDate(d.date)}</td>
+              <td data-label="สมาชิก">${escapeHtml(m?m.name:'(ลบแล้ว)')}</td>
+              <td data-label="จำนวนเงิน" class="num">${fmtMoney(d.amount)} ฿</td>
+              <td data-label="หมายเหตุ">${escapeHtml(d.note)||'-'}</td>
+            </tr>`;
+          }).join('')}
+        </tbody></table>` : `<div class="empty-state"><div class="e-ico">📭</div>ยังไม่มีรายการฝากเงิน</div>`}
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>สมาชิกยอดฝากสูงสุด 5 อันดับ</h3></div>
+      <div class="panel-body">
+        ${topMembers.length ? `<table><thead><tr><th>อันดับ</th><th>ชื่อสมาชิก</th><th>ยอดเงินสะสม</th></tr></thead><tbody>
+          ${topMembers.map((m,i)=>`<tr>
+            <td data-label="อันดับ"><span class="rank">${i+1}</span></td>
+            <td data-label="ชื่อสมาชิก">${escapeHtml(m.name)}</td>
+            <td data-label="ยอดเงินสะสม" class="num">${fmtMoney(m.balance)} ฿</td>
+          </tr>`).join('')}
+        </tbody></table>` : `<div class="empty-state"><div class="e-ico">🏦</div>ยังไม่มีสมาชิก</div>`}
+      </div>
+    </div>
+  `;
+}
+
+/* ================= MEMBERS ================= */
+let memberSearchTerm = '';
+function renderMembers(){
+  const list = state.members.filter(m => !memberSearchTerm ||
+    m.name.toLowerCase().includes(memberSearchTerm.toLowerCase()) ||
+    m.code.toLowerCase().includes(memberSearchTerm.toLowerCase()));
+
+  document.getElementById('mainContent').innerHTML = `
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">สมาชิก</h1>
+        <div class="page-title-sub">${state.members.length.toLocaleString('th-TH')} คน</div>
+      </div>
+      <button class="btn btn-primary" style="width:auto;" onclick="openMemberModal()">+ เพิ่มสมาชิก</button>
+    </div>
+    <hr class="page-divider">
+    <div class="panel">
+      <div class="panel-head">
+        <div class="search-box"><span>🔍</span><input id="memberSearchInput" placeholder="ค้นหาชื่อหรือรหัสสมาชิก" value="${escapeHtml(memberSearchTerm)}" oninput="memberSearchTerm=this.value; renderMembers();"></div>
+      </div>
+      <div class="panel-body">
+        ${list.length ? `<table><thead><tr><th>รหัสสมาชิก</th><th>ชื่อ</th><th>ยอดเงินสะสม</th><th></th></tr></thead><tbody>
+          ${list.map(m=>`<tr>
+            <td data-label="รหัสสมาชิก"><span class="badge badge-gray">${m.code}</span></td>
+            <td data-label="ชื่อ">${escapeHtml(m.name)}</td>
+            <td data-label="ยอดเงินสะสม" class="num">${fmtMoney(m.balance)} ฿</td>
+            <td class="no-label" style="text-align:right;"><span class="link-btn" onclick="navigate('memberDetail','${m.id}')">ดูรายละเอียด →</span></td>
+          </tr>`).join('')}
+        </tbody></table>` : `<div class="empty-state"><div class="e-ico">🔎</div>ไม่พบสมาชิกที่ค้นหา</div>`}
+      </div>
+    </div>
+    ${memberModalHTML()}
+  `;
+}
+
+function memberModalHTML(){
+  return `
+  <div class="modal-overlay" id="memberModalOverlay">
+    <div class="modal">
+      <div class="modal-head">
+        <h3 id="memberModalTitle">เพิ่มสมาชิก</h3>
+        <button class="modal-close" onclick="closeMemberModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="memberFormId">
+        <div class="field"><label>ชื่อ-นามสกุล</label><input id="memberFormName" placeholder="เช่น สมชาย ใจดี"></div>
+        <div class="row-2">
+          <div class="field"><label>เบอร์โทร</label><input id="memberFormPhone" placeholder="08xxxxxxxx"></div>
+          <div class="field"><label>วันที่สมัคร</label><input type="date" id="memberFormJoinDate"></div>
+        </div>
+        <div class="field"><label>ที่อยู่</label><textarea id="memberFormAddress" rows="2" placeholder="ที่อยู่ปัจจุบัน"></textarea></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" onclick="closeMemberModal()">ยกเลิก</button>
+        <button class="btn btn-primary" style="width:auto;" onclick="saveMember()">บันทึก</button>
+      </div>
+    </div>
+  </div>`;
+}
+function openMemberModal(memberId){
+  const overlay = document.getElementById('memberModalOverlay');
+  const m = memberId ? state.members.find(x=>x.id===memberId) : null;
+  document.getElementById('memberModalTitle').textContent = m ? 'แก้ไขสมาชิก' : 'เพิ่มสมาชิก';
+  document.getElementById('memberFormId').value = m ? m.id : '';
+  document.getElementById('memberFormName').value = m ? m.name : '';
+  document.getElementById('memberFormPhone').value = m ? m.phone : '';
+  document.getElementById('memberFormAddress').value = m ? m.address : '';
+  document.getElementById('memberFormJoinDate').value = m ? m.joinDate : todayISO();
+  overlay.classList.add('show');
+}
+function closeMemberModal(){ document.getElementById('memberModalOverlay').classList.remove('show'); }
+function saveMember(){
+  const id = document.getElementById('memberFormId').value;
+  const name = document.getElementById('memberFormName').value.trim();
+  const phone = document.getElementById('memberFormPhone').value.trim();
+  const address = document.getElementById('memberFormAddress').value.trim();
+  const joinDate = document.getElementById('memberFormJoinDate').value || todayISO();
+  if(!name){ showToast('กรุณากรอกชื่อ-นามสกุล', true); return; }
+
+  if(id){
+    const m = state.members.find(x=>x.id===id);
+    Object.assign(m, {name, phone, address, joinDate});
+    refMembers.child(id).update({name, phone, address, joinDate}).catch(err=>showToast('บันทึกไม่สำเร็จ: '+err.message, true));
+    showToast('แก้ไขข้อมูลสมาชิกสำเร็จ');
+  }else{
+    const newMember = {
+      id: uid('mem_'), code: nextMemberCode(), name, phone, address, joinDate,
+      balance:0, depositCount:0,
+    };
+    state.members.push(newMember);
+    refMembers.child(newMember.id).set(newMember).catch(err=>showToast('บันทึกไม่สำเร็จ: '+err.message, true));
+    showToast('เพิ่มสมาชิกสำเร็จ');
+  }
+  closeMemberModal();
+  renderMembers();
+}
+function deleteMember(id){
+  if(!isAdmin()){ showToast('เฉพาะผู้ดูแลระบบเท่านั้นที่ลบข้อมูลได้', true); return; }
+  if(!confirm('ยืนยันการลบสมาชิกนี้? ประวัติการฝากของสมาชิกจะถูกลบด้วย')) return;
+  const relatedDepositIds = state.deposits.filter(d=>d.memberId===id).map(d=>d.id);
+  state.members = state.members.filter(m=>m.id!==id);
+  state.deposits = state.deposits.filter(d=>d.memberId!==id);
+  refMembers.child(id).remove().catch(err=>showToast('ลบไม่สำเร็จ: '+err.message, true));
+  relatedDepositIds.forEach(depId => refDeposits.child(depId).remove());
+  showToast('ลบสมาชิกสำเร็จ');
+  navigate('members');
+}
+
+/* ================= MEMBER DETAIL ================= */
+function renderMemberDetail(){
+  const m = state.members.find(x=>x.id===state.memberDetailId);
+  const main = document.getElementById('mainContent');
+  if(!m){
+    main.innerHTML = `<div class="empty-state"><div class="e-ico">❓</div>ไม่พบข้อมูลสมาชิก
+      <div style="margin-top:10px;"><span class="link-btn" onclick="navigate('members')">← กลับหน้าสมาชิก</span></div></div>`;
+    return;
+  }
+  const history = state.deposits.filter(d=>d.memberId===m.id).sort((a,b)=>b.createdAt-a.createdAt);
+  main.innerHTML = `
+    <div class="page-header">
+      <div>
+        <span class="link-btn" onclick="navigate('members')">← กลับหน้าสมาชิก</span>
+        <h1 class="page-title" style="margin-top:6px;">${escapeHtml(m.name)}</h1>
+        <div class="page-title-sub">รหัสสมาชิก ${m.code} • สมัครเมื่อ ${fmtDate(m.joinDate)}</div>
+      </div>
+      <div class="toolbar">
+        <button class="btn btn-outline btn-sm" onclick="openMemberModal('${m.id}')">✎ แก้ไข</button>
+        ${isAdmin() ? `<button class="btn btn-danger btn-sm" onclick="deleteMember('${m.id}')">🗑 ลบ</button>` : ''}
+      </div>
+    </div>
+    <hr class="page-divider">
+    <div class="grid-cards" style="grid-template-columns:repeat(3,1fr);">
+      <div class="card"><div class="card-label">ยอดเงินสะสม</div><div class="card-value small">${fmtMoney(m.balance)} ฿</div></div>
+      <div class="card"><div class="card-label">จำนวนครั้งที่ฝาก</div><div class="card-value">${history.length.toLocaleString('th-TH')}</div></div>
+      <div class="card"><div class="card-label">เบอร์โทร</div><div class="card-value small">${escapeHtml(m.phone)||'-'}</div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h3>ข้อมูลสมาชิก</h3></div>
+      <div class="panel-body" style="padding-top:14px; padding-bottom:16px;">
+        <div style="font-size:13.8px; line-height:1.9;">
+          <div><b>ที่อยู่:</b> ${escapeHtml(m.address)||'-'}</div>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h3>ประวัติการฝากเงิน</h3></div>
+      <div class="panel-body">
+        ${history.length ? `<table><thead><tr><th>วันที่</th><th>จำนวนเงิน</th><th>หมายเหตุ</th></tr></thead><tbody>
+          ${history.map(d=>`<tr>
+            <td data-label="วันที่">${fmtDate(d.date)}</td>
+            <td data-label="จำนวนเงิน" class="num">${fmtMoney(d.amount)} ฿</td>
+            <td data-label="หมายเหตุ">${escapeHtml(d.note)||'-'}</td>
+          </tr>`).join('')}
+        </tbody></table>` : `<div class="empty-state"><div class="e-ico">📭</div>ยังไม่มีประวัติการฝาก</div>`}
+      </div>
+    </div>
+    ${memberModalHTML()}
+  `;
+}
+
+/* ================= DEPOSIT ================= */
+function renderDeposit(){
+  const options = state.members.map(m=>`<option value="${m.id}">${escapeHtml(m.code)} — ${escapeHtml(m.name)}</option>`).join('');
+  document.getElementById('mainContent').innerHTML = `
+    <div class="page-header">
+      <div><h1 class="page-title">ฝากเงิน</h1><div class="page-title-sub">บันทึกรายการฝากเงินให้สมาชิก</div></div>
+    </div>
+    <hr class="page-divider">
+    <div class="panel" style="max-width:520px;">
+      <div class="panel-body" style="padding-top:16px;">
+        ${state.members.length ? `
+        <div class="field"><label>เลือกสมาชิก</label>
+          <select id="depMemberId">
+            <option value="">-- เลือกสมาชิก --</option>
+            ${options}
+          </select>
+        </div>
+        <div class="row-2">
+          <div class="field"><label>วันที่</label><input type="date" id="depDate" value="${todayISO()}"></div>
+          <div class="field"><label>จำนวนเงิน (บาท)</label><input type="number" id="depAmount" min="0" step="0.01" placeholder="0.00"></div>
+        </div>
+        <div class="field"><label>หมายเหตุ</label><input id="depNote" placeholder="ไม่บังคับ"></div>
+        <button class="btn btn-primary" onclick="saveDeposit()">💾 บันทึกการฝาก</button>
+        ` : `<div class="empty-state"><div class="e-ico">👥</div>กรุณาเพิ่มสมาชิกก่อนบันทึกการฝากเงิน
+          <div style="margin-top:10px;"><span class="link-btn" onclick="navigate('members')">+ ไปหน้าสมาชิก</span></div></div>`}
+      </div>
+    </div>
+  `;
+}
+function saveDeposit(){
+  const memberId = document.getElementById('depMemberId').value;
+  const date = document.getElementById('depDate').value || todayISO();
+  const amount = parseFloat(document.getElementById('depAmount').value);
+  const note = document.getElementById('depNote').value.trim();
+  if(!memberId){ showToast('กรุณาเลือกสมาชิก', true); return; }
+  if(!amount || amount<=0){ showToast('กรุณากรอกจำนวนเงินให้ถูกต้อง', true); return; }
+
+  const m = state.members.find(x=>x.id===memberId);
+  const newBalance = Number(m.balance||0) + amount;
+  const newCount = Number(m.depositCount||0) + 1;
+  m.balance = newBalance;
+  m.depositCount = newCount;
+  const depositRecord = {id:uid('dep_'), memberId, date, amount, note, createdAt:Date.now()};
+  state.deposits.push(depositRecord);
+
+  refMembers.child(memberId).update({balance:newBalance, depositCount:newCount}).catch(err=>showToast('บันทึกไม่สำเร็จ: '+err.message, true));
+  refDeposits.child(depositRecord.id).set(depositRecord).catch(err=>showToast('บันทึกไม่สำเร็จ: '+err.message, true));
+
+  showToast(`บันทึกการฝากเงิน ${fmtMoney(amount)} ฿ ให้ ${m.name} สำเร็จ`);
+  renderDeposit();
+}
+
+/* ================= HISTORY ================= */
+let historySearch = '';
+function renderHistory(){
+  const term = historySearch.toLowerCase();
+  let rows = state.deposits.map(d => ({...d, member: state.members.find(m=>m.id===d.memberId)}));
+  if(term){
+    rows = rows.filter(r => (r.member?.name||'').toLowerCase().includes(term) || (r.date||'').includes(term));
+  }
+  rows.sort((a,b)=>b.createdAt-a.createdAt);
+
+  document.getElementById('mainContent').innerHTML = `
+    <div class="page-header">
+      <div><h1 class="page-title">ประวัติการฝากเงิน</h1><div class="page-title-sub">ทั้งหมด ${state.deposits.length.toLocaleString('th-TH')} รายการ</div></div>
+    </div>
+    <hr class="page-divider">
+    <div class="panel">
+      <div class="panel-head">
+        <div class="search-box"><span>🔍</span><input placeholder="ค้นหาชื่อสมาชิก หรือ วันที่ (เช่น 2026-07)" value="${escapeHtml(historySearch)}" oninput="historySearch=this.value; renderHistory();"></div>
+      </div>
+      <div class="panel-body">
+        ${rows.length ? `<table><thead><tr><th>วันที่</th><th>สมาชิก</th><th>จำนวนเงิน</th><th>หมายเหตุ</th></tr></thead><tbody>
+          ${rows.map(d=>`<tr>
+            <td data-label="วันที่">${fmtDate(d.date)}</td>
+            <td data-label="สมาชิก">${escapeHtml(d.member?d.member.name:'(ลบแล้ว)')}</td>
+            <td data-label="จำนวนเงิน" class="num">${fmtMoney(d.amount)} ฿</td>
+            <td data-label="หมายเหตุ">${escapeHtml(d.note)||'-'}</td>
+          </tr>`).join('')}
+        </tbody></table>` : `<div class="empty-state"><div class="e-ico">🔎</div>ไม่พบรายการที่ค้นหา</div>`}
+      </div>
+    </div>
+  `;
+}
+
+/* ================= REPORTS ================= */
+function renderReports(){
+  const totalBalance = state.members.reduce((s,m)=>s+Number(m.balance||0),0);
+  const monthly = {};
+  state.deposits.forEach(d=>{
+    const ym = (d.date||'').slice(0,7);
+    monthly[ym] = (monthly[ym]||0) + Number(d.amount||0);
+  });
+  const monthKeys = Object.keys(monthly).sort().reverse();
+  const topMember = [...state.members].sort((a,b)=>(b.balance||0)-(a.balance||0))[0];
+
+  document.getElementById('mainContent').innerHTML = `
+    <div class="page-header">
+      <div><h1 class="page-title">รายงาน</h1><div class="page-title-sub">สรุปภาพรวมกองทุน</div></div>
+      <button class="btn btn-outline" style="width:auto;" onclick="exportExcel()">⬇ Export Excel</button>
+    </div>
+    <hr class="page-divider">
+    <div class="grid-cards" style="grid-template-columns:repeat(3,1fr);">
+      <div class="card"><div class="card-label">ยอดเงินฝากรวมทั้งหมด</div><div class="card-value small">${fmtMoney(totalBalance)} ฿</div></div>
+      <div class="card"><div class="card-label">จำนวนสมาชิกทั้งหมด</div><div class="card-value">${state.members.length.toLocaleString('th-TH')}</div></div>
+      <div class="card"><div class="card-label">สมาชิกยอดฝากสูงสุด</div><div class="card-value small">${topMember?escapeHtml(topMember.name):'-'}</div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h3>ยอดฝากรายเดือน</h3></div>
+      <div class="panel-body">
+        ${monthKeys.length ? `<table><thead><tr><th>เดือน</th><th>ยอดฝากรวม</th></tr></thead><tbody>
+          ${monthKeys.map(ym=>`<tr><td data-label="เดือน">${ym}</td><td data-label="ยอดฝากรวม" class="num">${fmtMoney(monthly[ym])} ฿</td></tr>`).join('')}
+        </tbody></table>` : `<div class="empty-state"><div class="e-ico">📭</div>ยังไม่มีข้อมูล</div>`}
+      </div>
+    </div>
+  `;
+}
+function exportExcel(){
+  if(typeof XLSX === 'undefined'){ showToast('ไม่สามารถโหลดไลบรารี Excel ได้ กรุณาตรวจสอบอินเทอร์เน็ต', true); return; }
+  const wb = XLSX.utils.book_new();
+
+  const memberRows = state.members.map(m=>({
+    'รหัสสมาชิก':m.code, 'ชื่อ-นามสกุล':m.name, 'เบอร์โทร':m.phone, 'ที่อยู่':m.address,
+    'วันที่สมัคร':m.joinDate, 'ยอดเงินสะสม':Number(m.balance||0), 'จำนวนครั้งที่ฝาก':m.depositCount||0,
+  }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(memberRows), 'สมาชิก');
+
+  const depRows = state.deposits.map(d=>{
+    const m = state.members.find(x=>x.id===d.memberId);
+    return {'วันที่':d.date, 'รหัสสมาชิก':m?m.code:'', 'ชื่อสมาชิก':m?m.name:'(ลบแล้ว)', 'จำนวนเงิน':Number(d.amount||0), 'หมายเหตุ':d.note};
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(depRows), 'ประวัติการฝาก');
+
+  const monthly = {};
+  state.deposits.forEach(d=>{ const ym=(d.date||'').slice(0,7); monthly[ym]=(monthly[ym]||0)+Number(d.amount||0); });
+  const summaryRows = [
+    {'รายการ':'ยอดเงินฝากรวมทั้งหมด', 'จำนวน':state.members.reduce((s,m)=>s+Number(m.balance||0),0)},
+    {'รายการ':'จำนวนสมาชิกทั้งหมด', 'จำนวน':state.members.length},
+    ...Object.keys(monthly).sort().map(ym=>({'รายการ':'ยอดฝากเดือน '+ym, 'จำนวน':monthly[ym]})),
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryRows), 'สรุป');
+
+  XLSX.writeFile(wb, `รายงานกองทุน_${todayISO()}.xlsx`);
+  showToast('Export ไฟล์ Excel สำเร็จ');
+}
+
+/* ================= SETTINGS ================= */
+let settingsTab = 'general';
+function renderSettings(){
+  if(!isAdmin()){
+    document.getElementById('mainContent').innerHTML = `<div class="empty-state"><div class="e-ico">🔒</div>เฉพาะผู้ดูแลระบบเท่านั้นที่เข้าถึงหน้านี้ได้</div>`;
+    return;
+  }
+  document.getElementById('mainContent').innerHTML = `
+    <div class="page-header"><div><h1 class="page-title">ตั้งค่าระบบ</h1><div class="page-title-sub">จัดการข้อมูลกองทุนและผู้ใช้งาน</div></div></div>
+    <hr class="page-divider">
+    <div class="tabs">
+      <div class="tab ${settingsTab==='general'?'active':''}" onclick="settingsTab='general'; renderSettings();">ข้อมูลกองทุน</div>
+      <div class="tab ${settingsTab==='users'?'active':''}" onclick="settingsTab='users'; renderSettings();">ผู้ใช้งาน</div>
+    </div>
+    <div id="settingsTabBody"></div>
+  `;
+  if(settingsTab==='general') renderSettingsGeneral(); else renderSettingsUsers();
+}
+let pendingLogo; // undefined = no change yet; string = new value staged for save
+function renderSettingsGeneral(){
+  const s = state.settings;
+  pendingLogo = undefined;
+  document.getElementById('settingsTabBody').innerHTML = `
+    <div class="panel" style="max-width:520px;">
+      <div class="panel-body" style="padding-top:16px;">
+        <div class="field">
+          <label>โลโก้กองทุน</label>
+          <div class="logo-upload-row">
+            <div class="logo-preview" id="logoPreview"></div>
+            <div class="logo-upload-actions">
+              <label class="file-input-label">
+                🖼 ${isImageLogo(s.logo) ? 'เปลี่ยนรูปภาพ' : 'อัปโหลดรูปภาพ'}
+                <input type="file" accept="image/*" onchange="handleLogoUpload(this)">
+              </label>
+              ${isImageLogo(s.logo) ? `<span class="link-btn" style="color:var(--danger); font-size:12.5px;" onclick="resetLogoToDefault()">ลบรูป / ใช้ค่าเริ่มต้น</span>` : ''}
+            </div>
+          </div>
+        </div>
+        <div class="field"><label>ชื่อกองทุน</label><input id="setFundName" value="${escapeHtml(s.fundName)}"></div>
+        <div class="field"><label>ที่อยู่</label><textarea id="setAddress" rows="2">${escapeHtml(s.address)}</textarea></div>
+        <div class="field"><label>เบอร์โทร</label><input id="setPhone" value="${escapeHtml(s.phone)}"></div>
+        <button class="btn btn-primary" onclick="saveSettings()">💾 บันทึกการตั้งค่า</button>
+      </div>
+    </div>
+  `;
+  renderLogoInto(document.getElementById('logoPreview'), s.logo);
+}
+function handleLogoUpload(input){
+  const file = input.files && input.files[0];
+  if(!file) return;
+  if(!file.type.startsWith('image/')){ showToast('กรุณาเลือกไฟล์รูปภาพ', true); return; }
+  if(file.size > 1.5*1024*1024){ showToast('ไฟล์ใหญ่เกินไป กรุณาเลือกรูปไม่เกิน 1.5MB', true); return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    pendingLogo = e.target.result;
+    renderLogoInto(document.getElementById('logoPreview'), pendingLogo);
+  };
+  reader.readAsDataURL(file);
+}
+function resetLogoToDefault(){
+  pendingLogo = '🌿';
+  renderLogoInto(document.getElementById('logoPreview'), pendingLogo);
+}
+function saveSettings(){
+  state.settings.fundName = document.getElementById('setFundName').value.trim() || 'ระบบกองทุนเงินฝาก';
+  if(pendingLogo !== undefined) state.settings.logo = pendingLogo;
+  state.settings.address = document.getElementById('setAddress').value.trim();
+  state.settings.phone = document.getElementById('setPhone').value.trim();
+  persistSettings();
+  applyBranding();
+  renderSettingsGeneral();
+  showToast('บันทึกการตั้งค่าสำเร็จ');
+}
+function renderSettingsUsers(){
+  document.getElementById('settingsTabBody').innerHTML = `
+    <div class="panel">
+      <div class="panel-head"><h3>รายชื่อผู้ใช้งาน</h3><button class="btn btn-primary btn-sm" style="width:auto;" onclick="openUserModal()">+ เพิ่มผู้ใช้งาน</button></div>
+      <div class="panel-body">
+        <table><thead><tr><th>ชื่อผู้ใช้</th><th>ชื่อที่แสดง</th><th>ระดับสิทธิ์</th><th></th></tr></thead><tbody>
+          ${state.users.map(u=>`<tr>
+            <td data-label="ชื่อผู้ใช้">${escapeHtml(u.username)}</td>
+            <td data-label="ชื่อที่แสดง">${escapeHtml(u.displayName||'-')}</td>
+            <td data-label="ระดับสิทธิ์"><span class="badge ${u.role==='Admin'?'badge-green':'badge-gray'}">${u.role==='Admin'?'Admin':'User'}</span></td>
+            <td class="no-label" style="text-align:right;">
+              ${state.users.length>1 ? `<span class="link-btn" style="color:var(--danger);" onclick="deleteUser('${u.username}')">ลบ</span>` : ''}
+            </td>
+          </tr>`).join('')}
+        </tbody></table>
+      </div>
+    </div>
+    ${userModalHTML()}
+  `;
+}
+function userModalHTML(){
+  return `
+  <div class="modal-overlay" id="userModalOverlay">
+    <div class="modal">
+      <div class="modal-head"><h3>เพิ่มผู้ใช้งาน</h3><button class="modal-close" onclick="closeUserModal()">✕</button></div>
+      <div class="modal-body">
+        <div class="field"><label>ชื่อผู้ใช้ (สำหรับเข้าสู่ระบบ)</label><input id="userFormUsername" placeholder="เช่น staff01"></div>
+        <div class="field"><label>ชื่อที่แสดง</label><input id="userFormDisplay" placeholder="เช่น สมหญิง พนักงาน"></div>
+        <div class="field"><label>รหัสผ่าน</label><input type="password" id="userFormPassword" placeholder="ตั้งรหัสผ่าน"></div>
+        <div class="field"><label>ระดับสิทธิ์</label>
+          <select id="userFormRole">
+            <option value="User">User (เพิ่ม/แก้ไขข้อมูล, ดูรายงาน)</option>
+            <option value="Admin">Admin (ทำได้ทุกอย่าง)</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" onclick="closeUserModal()">ยกเลิก</button>
+        <button class="btn btn-primary" style="width:auto;" onclick="saveUser()">บันทึก</button>
+      </div>
+    </div>
+  </div>`;
+}
+function openUserModal(){ document.getElementById('userModalOverlay').classList.add('show'); }
+function closeUserModal(){ document.getElementById('userModalOverlay').classList.remove('show'); }
+function saveUser(){
+  const username = document.getElementById('userFormUsername').value.trim();
+  const displayName = document.getElementById('userFormDisplay').value.trim();
+  const password = document.getElementById('userFormPassword').value;
+  const role = document.getElementById('userFormRole').value;
+  if(!username || !password){ showToast('กรุณากรอกชื่อผู้ใช้และรหัสผ่าน', true); return; }
+  if(!/^[a-zA-Z0-9_-]+$/.test(username)){ showToast('ชื่อผู้ใช้ใช้ได้เฉพาะ a-z, 0-9, _ และ -', true); return; }
+  if(state.users.some(u=>u.username===username)){ showToast('มีชื่อผู้ใช้นี้อยู่แล้ว', true); return; }
+  const newUser = {username, password, role, displayName};
+  state.users.push(newUser);
+  refUsers.child(username).set(newUser).catch(err=>showToast('บันทึกไม่สำเร็จ: '+err.message, true));
+  closeUserModal();
+  showToast('เพิ่มผู้ใช้งานสำเร็จ');
+  renderSettingsUsers();
+}
+function deleteUser(username){
+  if(!confirm(`ยืนยันการลบผู้ใช้งาน "${username}"?`)) return;
+  state.users = state.users.filter(u=>u.username!==username);
+  refUsers.child(username).remove().catch(err=>showToast('ลบไม่สำเร็จ: '+err.message, true));
+  showToast('ลบผู้ใช้งานสำเร็จ');
+  renderSettingsUsers();
+}
+
+/* ---------------- boot ---------------- */
+async function boot(){
+  document.getElementById('loginPass').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
+  document.getElementById('loginUser').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
+
+  applyBranding();
+  try{
+    await initFirebaseData();
+  }catch(err){
+    console.error(err);
+    document.getElementById('loginConnecting').textContent = '⚠️ เชื่อมต่อฐานข้อมูลไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตแล้วรีเฟรชหน้า';
+    return;
+  }
+  dataReady = true;
+  applyBranding();
+  document.getElementById('loginConnecting').style.display = 'none';
+  document.getElementById('loginFormWrap').style.display = 'block';
+
+  const u = currentUser();
+  if(u && state.users.some(x=>x.username===u.username)){ enterApp(); }
+  else if(u){ sessionStorage.removeItem(SESSION_KEY); }
+}
+boot();
+</script>
+</body>
+</html>
+
