@@ -335,11 +335,12 @@
   <div class="login-card">
     <div class="login-logo" id="loginLogo">🌿</div>
     <h1 class="login-title" id="loginFundName">ระบบกองทุนเงินฝาก</h1>
-    <p class="login-sub">เข้าสู่ระบบเพื่อจัดการข้อมูลกองทุน</p>
     <div id="loginConnecting" style="text-align:center; padding:18px 0; color:var(--text-muted); font-size:13.8px;">
       ⏳ กำลังเชื่อมต่อฐานข้อมูล...
     </div>
+
     <div id="loginFormWrap" style="display:none;">
+      <p class="login-sub">เข้าสู่ระบบเพื่อจัดการข้อมูลกองทุน</p>
       <div class="login-error" id="loginError">ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง</div>
       <div class="field">
         <label>ชื่อผู้ใช้</label>
@@ -350,8 +351,44 @@
         <input type="password" id="loginPass" placeholder="กรอกรหัสผ่าน" autocomplete="current-password">
       </div>
       <button class="btn btn-primary" onclick="doLogin()">เข้าสู่ระบบ</button>
-      <div class="login-hint">บัญชีเริ่มต้น: <b>admin</b> / <b>admin123</b></div>
+      <div class="login-hint" style="cursor:pointer;" onclick="showRegister()">ยังไม่มีบัญชี? <b>ลงทะเบียนที่นี่</b></div>
     </div>
+
+    <div id="regFormWrap" style="display:none;">
+      <p class="login-sub">ลงทะเบียนเป็นสมาชิกกองทุน (ต้องมีรหัสเชิญ)</p>
+      <div class="login-error" id="regError"></div>
+      <div class="field">
+        <label>รหัสเชิญ (Invitation Code)</label>
+        <input type="text" id="regInviteCode" placeholder="กรอกรหัสเชิญที่ได้รับ">
+      </div>
+      <div class="field">
+        <label>ชื่อ-นามสกุล</label>
+        <input type="text" id="regDisplayName" placeholder="เช่น สมหญิง ใจดี">
+      </div>
+      <div class="row-2">
+        <div class="field"><label>เบอร์โทร</label><input type="text" id="regPhone" placeholder="08xxxxxxxx"></div>
+        <div class="field"><label>วันที่สมัคร</label><input type="date" id="regJoinDate"></div>
+      </div>
+      <div class="field">
+        <label>ที่อยู่</label>
+        <textarea id="regAddress" rows="2" placeholder="ที่อยู่ปัจจุบัน"></textarea>
+      </div>
+      <div class="field">
+        <label>ชื่อผู้ใช้ (สำหรับเข้าสู่ระบบ)</label>
+        <input type="text" id="regUsername" placeholder="a-z, 0-9, _ เท่านั้น" autocomplete="username">
+      </div>
+      <div class="field">
+        <label>รหัสผ่าน</label>
+        <input type="password" id="regPassword" placeholder="ตั้งรหัสผ่านอย่างน้อย 4 ตัว" autocomplete="new-password">
+      </div>
+      <div class="field">
+        <label>ยืนยันรหัสผ่าน</label>
+        <input type="password" id="regPasswordConfirm" placeholder="กรอกรหัสผ่านอีกครั้ง" autocomplete="new-password">
+      </div>
+      <button class="btn btn-primary" onclick="doRegister()">ลงทะเบียน</button>
+      <div class="login-hint" style="cursor:pointer;" onclick="showLogin()">มีบัญชีอยู่แล้ว? <b>เข้าสู่ระบบ</b></div>
+    </div>
+
   </div>
 </div>
 
@@ -522,6 +559,63 @@ function doLogin(){
   sessionStorage.setItem(SESSION_KEY, JSON.stringify({username:found.username, role:found.role, displayName:found.displayName||found.username}));
   enterApp();
 }
+function showRegister(){
+  document.getElementById('loginFormWrap').style.display='none';
+  document.getElementById('regFormWrap').style.display='block';
+  document.getElementById('regError').style.display='none';
+  document.getElementById('regJoinDate').value = todayISO();
+}
+function showLogin(){
+  document.getElementById('regFormWrap').style.display='none';
+  document.getElementById('loginFormWrap').style.display='block';
+  document.getElementById('loginError').style.display='none';
+}
+function regShowError(msg){
+  const box = document.getElementById('regError');
+  box.textContent = msg;
+  box.style.display='block';
+}
+function doRegister(){
+  const inviteCode = document.getElementById('regInviteCode').value.trim();
+  const displayName = document.getElementById('regDisplayName').value.trim();
+  const phone = document.getElementById('regPhone').value.trim();
+  const address = document.getElementById('regAddress').value.trim();
+  const joinDate = document.getElementById('regJoinDate').value || todayISO();
+  const username = document.getElementById('regUsername').value.trim();
+  const password = document.getElementById('regPassword').value;
+  const passwordConfirm = document.getElementById('regPasswordConfirm').value;
+
+  if(!state.settings.invitationCode){
+    regShowError('ระบบยังไม่เปิดให้ลงทะเบียน กรุณาติดต่อผู้ดูแลระบบ');
+    return;
+  }
+  if(inviteCode !== state.settings.invitationCode){
+    regShowError('รหัสเชิญไม่ถูกต้อง');
+    return;
+  }
+  if(!displayName){ regShowError('กรุณากรอกชื่อ-นามสกุล'); return; }
+  if(!username){ regShowError('กรุณากรอกชื่อผู้ใช้'); return; }
+  if(!/^[a-zA-Z0-9_-]+$/.test(username)){ regShowError('ชื่อผู้ใช้ใช้ได้เฉพาะ a-z, 0-9, _ และ -'); return; }
+  if(!password || password.length < 4){ regShowError('รหัสผ่านต้องมีอย่างน้อย 4 ตัวอักษร'); return; }
+  if(password !== passwordConfirm){ regShowError('รหัสผ่านทั้งสองช่องไม่ตรงกัน'); return; }
+  if(state.users.some(u=>u.username===username)){ regShowError('มีชื่อผู้ใช้นี้อยู่แล้ว กรุณาเลือกชื่ออื่น'); return; }
+
+  // ลงทะเบียนเสร็จ = เป็นสมาชิกกองทุนทันที
+  const newMember = {
+    id: uid('mem_'), code: nextMemberCode(), name: displayName, phone, address, joinDate,
+    balance:0, depositCount:0,
+  };
+  state.members.push(newMember);
+  refMembers.child(newMember.id).set(newMember).catch(err=>regShowError('ลงทะเบียนไม่สำเร็จ: '+err.message));
+
+  const newUser = {username, password, role:'User', displayName, memberId:newMember.id};
+  state.users.push(newUser);
+  refUsers.child(username).set(newUser).catch(err=>regShowError('ลงทะเบียนไม่สำเร็จ: '+err.message));
+
+  sessionStorage.setItem(SESSION_KEY, JSON.stringify({username, role:'User', displayName, memberId:newMember.id}));
+  showToast(`ลงทะเบียนสำเร็จ ยินดีต้อนรับสมาชิกใหม่ ${displayName}`);
+  enterApp();
+}
 function currentUser(){
   try{ return JSON.parse(sessionStorage.getItem(SESSION_KEY)); }catch(e){ return null; }
 }
@@ -531,6 +625,7 @@ function doLogout(){
   document.getElementById('loginScreen').style.display='flex';
   document.getElementById('loginUser').value='';
   document.getElementById('loginPass').value='';
+  showLogin();
 }
 function isAdmin(){
   const u = currentUser();
@@ -571,13 +666,15 @@ const NAV_ITEMS = [
   {id:'dashboard', label:'Dashboard', ico:'🏠'},
   {id:'members', label:'สมาชิก', ico:'👥'},
   {id:'deposit', label:'ฝากเงิน', ico:'💰'},
-  {id:'history', label:'ประวัติการฝาก', ico:'📜'},
+  {id:'withdraw', label:'ถอนเงิน', ico:'💸'},
+  {id:'history', label:'ประวัติการทำรายการ', ico:'📜'},
   {id:'reports', label:'รายงาน', ico:'📊'},
+  {id:'dividend', label:'ปันผล', ico:'🎁', adminOnly:true},
   {id:'settings', label:'ตั้งค่าระบบ', ico:'⚙️'},
 ];
 function renderNav(){
   const nav = document.getElementById('navList');
-  nav.innerHTML = NAV_ITEMS.map(it => `
+  nav.innerHTML = NAV_ITEMS.filter(it => !it.adminOnly || isAdmin()).map(it => `
     <div class="nav-item ${state.currentView===it.id?'active':''}" onclick="navigate('${it.id}')">
       <span class="ico">${it.ico}</span><span>${it.label}</span>
     </div>`).join('');
@@ -598,8 +695,10 @@ function navigate(view, param){
     members: renderMembers,
     memberDetail: renderMemberDetail,
     deposit: renderDeposit,
+    withdraw: renderWithdraw,
     history: renderHistory,
     reports: renderReports,
+    dividend: renderDividend,
     settings: renderSettings,
   };
   (renderers[view] || renderDashboard)();
@@ -611,8 +710,12 @@ function renderDashboard(){
   const totalMembers = state.members.length;
   const totalBalance = state.members.reduce((s,m)=>s+Number(m.balance||0),0);
   const today = todayISO();
-  const todayCount = state.deposits.filter(d=>d.date===today).length;
-  const latest = [...state.deposits].sort((a,b)=> b.createdAt - a.createdAt).slice(0,10);
+  const approvedDeposits = state.deposits.filter(d=>statusOf(d)==='approved');
+  const pendingDepositCount = state.deposits.filter(d=>typeOf(d)==='deposit' && statusOf(d)==='pending').length;
+  const pendingWithdrawCount = state.deposits.filter(d=>typeOf(d)==='withdraw' && statusOf(d)==='pending').length;
+  const pendingCount = pendingDepositCount + pendingWithdrawCount;
+  const todayCount = approvedDeposits.filter(d=>d.date===today).length;
+  const latest = [...approvedDeposits].sort((a,b)=> b.createdAt - a.createdAt).slice(0,10);
   const topMembers = [...state.members].sort((a,b)=> (b.balance||0)-(a.balance||0)).slice(0,5);
 
   document.getElementById('mainContent').innerHTML = `
@@ -625,25 +728,27 @@ function renderDashboard(){
     <hr class="page-divider">
     <div class="grid-cards">
       <div class="card"><div class="card-label">สมาชิกทั้งหมด</div><div class="card-value">${totalMembers.toLocaleString('th-TH')}</div></div>
-      <div class="card"><div class="card-label">ยอดเงินฝากรวม</div><div class="card-value small">${fmtMoney(totalBalance)} ฿</div></div>
-      <div class="card"><div class="card-label">รายการฝากวันนี้</div><div class="card-value">${todayCount.toLocaleString('th-TH')}</div></div>
-      <div class="card"><div class="card-label">จำนวนรายการทั้งหมด</div><div class="card-value">${state.deposits.length.toLocaleString('th-TH')}</div></div>
+      <div class="card"><div class="card-label">ยอดคงเหลือรวม</div><div class="card-value small">${fmtMoney(totalBalance)} ฿</div></div>
+      <div class="card"><div class="card-label">รายการวันนี้</div><div class="card-value">${todayCount.toLocaleString('th-TH')}</div></div>
+      ${isAdmin() ? `<div class="card" ${pendingCount?'style="cursor:pointer;"':''} ${pendingCount?`onclick="navigate('${pendingDepositCount>0?'deposit':'withdraw'}')"`:''}><div class="card-label">คำขอรออนุมัติ</div><div class="card-value" style="${pendingCount?'color:#9a6b00;':''}">${pendingCount.toLocaleString('th-TH')}</div></div>`
+      : `<div class="card"><div class="card-label">จำนวนรายการทั้งหมด</div><div class="card-value">${approvedDeposits.length.toLocaleString('th-TH')}</div></div>`}
     </div>
 
     <div class="panel">
-      <div class="panel-head"><h3>รายการฝากล่าสุด</h3><span class="link-btn" onclick="navigate('history')">ดูทั้งหมด →</span></div>
+      <div class="panel-head"><h3>รายการล่าสุด</h3><span class="link-btn" onclick="navigate('history')">ดูทั้งหมด →</span></div>
       <div class="panel-body">
-        ${latest.length ? `<table><thead><tr><th>วันที่</th><th>สมาชิก</th><th>จำนวนเงิน</th><th>หมายเหตุ</th></tr></thead><tbody>
+        ${latest.length ? `<table><thead><tr><th>วันที่</th><th>สมาชิก</th><th>ประเภท</th><th>จำนวนเงิน</th><th>หมายเหตุ</th></tr></thead><tbody>
           ${latest.map(d=>{
             const m = state.members.find(x=>x.id===d.memberId);
             return `<tr>
               <td data-label="วันที่">${fmtDate(d.date)}</td>
               <td data-label="สมาชิก">${escapeHtml(m?m.name:'(ลบแล้ว)')}</td>
-              <td data-label="จำนวนเงิน" class="num">${fmtMoney(d.amount)} ฿</td>
+              <td data-label="ประเภท">${typeBadge(typeOf(d))}</td>
+              <td data-label="จำนวนเงิน" class="num">${amountDisplay(d)}</td>
               <td data-label="หมายเหตุ">${escapeHtml(d.note)||'-'}</td>
             </tr>`;
           }).join('')}
-        </tbody></table>` : `<div class="empty-state"><div class="e-ico">📭</div>ยังไม่มีรายการฝากเงิน</div>`}
+        </tbody></table>` : `<div class="empty-state"><div class="e-ico">📭</div>ยังไม่มีรายการ</div>`}
       </div>
     </div>
 
@@ -675,7 +780,6 @@ function renderMembers(){
         <h1 class="page-title">สมาชิก</h1>
         <div class="page-title-sub">${state.members.length.toLocaleString('th-TH')} คน</div>
       </div>
-      <button class="btn btn-primary" style="width:auto;" onclick="openMemberModal()">+ เพิ่มสมาชิก</button>
     </div>
     <hr class="page-divider">
     <div class="panel">
@@ -721,7 +825,14 @@ function memberModalHTML(){
     </div>
   </div>`;
 }
+function canEditMember(id){
+  if(isAdmin()) return true;
+  const u = currentUser();
+  return !!u && u.memberId === id;
+}
 function openMemberModal(memberId){
+  if(memberId && !canEditMember(memberId)){ showToast('คุณไม่มีสิทธิ์แก้ไขข้อมูลสมาชิกคนนี้', true); return; }
+  if(!memberId && !isAdmin()){ showToast('คุณไม่มีสิทธิ์เพิ่มสมาชิก', true); return; }
   const overlay = document.getElementById('memberModalOverlay');
   const m = memberId ? state.members.find(x=>x.id===memberId) : null;
   document.getElementById('memberModalTitle').textContent = m ? 'แก้ไขสมาชิก' : 'เพิ่มสมาชิก';
@@ -735,6 +846,8 @@ function openMemberModal(memberId){
 function closeMemberModal(){ document.getElementById('memberModalOverlay').classList.remove('show'); }
 function saveMember(){
   const id = document.getElementById('memberFormId').value;
+  if(id && !canEditMember(id)){ showToast('คุณไม่มีสิทธิ์แก้ไขข้อมูลสมาชิกคนนี้', true); closeMemberModal(); return; }
+  if(!id && !isAdmin()){ showToast('คุณไม่มีสิทธิ์เพิ่มสมาชิก', true); closeMemberModal(); return; }
   const name = document.getElementById('memberFormName').value.trim();
   const phone = document.getElementById('memberFormPhone').value.trim();
   const address = document.getElementById('memberFormAddress').value.trim();
@@ -746,6 +859,8 @@ function saveMember(){
     Object.assign(m, {name, phone, address, joinDate});
     refMembers.child(id).update({name, phone, address, joinDate}).catch(err=>showToast('บันทึกไม่สำเร็จ: '+err.message, true));
     showToast('แก้ไขข้อมูลสมาชิกสำเร็จ');
+    closeMemberModal();
+    if(state.currentView === 'memberDetail') navigate('memberDetail', id); else renderMembers();
   }else{
     const newMember = {
       id: uid('mem_'), code: nextMemberCode(), name, phone, address, joinDate,
@@ -754,13 +869,13 @@ function saveMember(){
     state.members.push(newMember);
     refMembers.child(newMember.id).set(newMember).catch(err=>showToast('บันทึกไม่สำเร็จ: '+err.message, true));
     showToast('เพิ่มสมาชิกสำเร็จ');
+    closeMemberModal();
+    renderMembers();
   }
-  closeMemberModal();
-  renderMembers();
 }
 function deleteMember(id){
   if(!isAdmin()){ showToast('เฉพาะผู้ดูแลระบบเท่านั้นที่ลบข้อมูลได้', true); return; }
-  if(!confirm('ยืนยันการลบสมาชิกนี้? ประวัติการฝากของสมาชิกจะถูกลบด้วย')) return;
+  if(!confirm('ยืนยันการลบสมาชิกนี้? ประวัติการทำรายการทั้งหมดของสมาชิกจะถูกลบด้วย')) return;
   const relatedDepositIds = state.deposits.filter(d=>d.memberId===id).map(d=>d.id);
   state.members = state.members.filter(m=>m.id!==id);
   state.deposits = state.deposits.filter(d=>d.memberId!==id);
@@ -788,14 +903,14 @@ function renderMemberDetail(){
         <div class="page-title-sub">รหัสสมาชิก ${m.code} • สมัครเมื่อ ${fmtDate(m.joinDate)}</div>
       </div>
       <div class="toolbar">
-        <button class="btn btn-outline btn-sm" onclick="openMemberModal('${m.id}')">✎ แก้ไข</button>
+        ${canEditMember(m.id) ? `<button class="btn btn-outline btn-sm" onclick="openMemberModal('${m.id}')">✎ แก้ไข</button>` : ''}
         ${isAdmin() ? `<button class="btn btn-danger btn-sm" onclick="deleteMember('${m.id}')">🗑 ลบ</button>` : ''}
       </div>
     </div>
     <hr class="page-divider">
     <div class="grid-cards" style="grid-template-columns:repeat(3,1fr);">
       <div class="card"><div class="card-label">ยอดเงินสะสม</div><div class="card-value small">${fmtMoney(m.balance)} ฿</div></div>
-      <div class="card"><div class="card-label">จำนวนครั้งที่ฝาก</div><div class="card-value">${history.length.toLocaleString('th-TH')}</div></div>
+      <div class="card"><div class="card-label">จำนวนครั้งที่ฝาก</div><div class="card-value">${Number(m.depositCount||0).toLocaleString('th-TH')}</div></div>
       <div class="card"><div class="card-label">เบอร์โทร</div><div class="card-value small">${escapeHtml(m.phone)||'-'}</div></div>
     </div>
     <div class="panel">
@@ -807,15 +922,17 @@ function renderMemberDetail(){
       </div>
     </div>
     <div class="panel">
-      <div class="panel-head"><h3>ประวัติการฝากเงิน</h3></div>
+      <div class="panel-head"><h3>ประวัติการทำรายการ</h3></div>
       <div class="panel-body">
-        ${history.length ? `<table><thead><tr><th>วันที่</th><th>จำนวนเงิน</th><th>หมายเหตุ</th></tr></thead><tbody>
+        ${history.length ? `<table><thead><tr><th>วันที่</th><th>ประเภท</th><th>จำนวนเงิน</th><th>สถานะ</th><th>หมายเหตุ</th></tr></thead><tbody>
           ${history.map(d=>`<tr>
             <td data-label="วันที่">${fmtDate(d.date)}</td>
-            <td data-label="จำนวนเงิน" class="num">${fmtMoney(d.amount)} ฿</td>
+            <td data-label="ประเภท">${typeBadge(typeOf(d))}</td>
+            <td data-label="จำนวนเงิน" class="num">${amountDisplay(d)}</td>
+            <td data-label="สถานะ">${statusBadge(statusOf(d))}</td>
             <td data-label="หมายเหตุ">${escapeHtml(d.note)||'-'}</td>
           </tr>`).join('')}
-        </tbody></table>` : `<div class="empty-state"><div class="e-ico">📭</div>ยังไม่มีประวัติการฝาก</div>`}
+        </tbody></table>` : `<div class="empty-state"><div class="e-ico">📭</div>ยังไม่มีประวัติการทำรายการ</div>`}
       </div>
     </div>
     ${memberModalHTML()}
@@ -823,14 +940,60 @@ function renderMemberDetail(){
 }
 
 /* ================= DEPOSIT ================= */
+function statusOf(d){ return d.status || 'approved'; }
+function typeOf(d){ return d.type || 'deposit'; }
+function typeBadge(type){
+  if(type==='dividend') return `<span class="badge" style="background:#fdeacb; color:#8a5a00;">🎁 ปันผล</span>`;
+  if(type==='withdraw') return `<span class="badge" style="background:var(--danger-bg); color:var(--danger);">💸 ถอนเงิน</span>`;
+  return `<span class="badge badge-gray">ฝากเงิน</span>`;
+}
+function statusBadge(status){
+  if(status==='pending') return `<span class="badge" style="background:#fff2d9; color:#9a6b00;">รออนุมัติ</span>`;
+  if(status==='rejected') return `<span class="badge" style="background:var(--danger-bg); color:var(--danger);">ถูกปฏิเสธ</span>`;
+  return `<span class="badge badge-green">อนุมัติแล้ว</span>`;
+}
+function amountDisplay(d){
+  if(typeOf(d)==='withdraw') return `<span style="color:var(--danger);">-${fmtMoney(d.amount)} ฿</span>`;
+  return `${fmtMoney(d.amount)} ฿`;
+}
 function renderDeposit(){
+  if(isAdmin()) renderDepositAdmin(); else renderDepositUser();
+}
+
+/* --- Admin: approve/reject queue + direct entry (auto-approved) --- */
+function renderDepositAdmin(){
+  const pending = state.deposits.filter(d=>typeOf(d)==='deposit' && statusOf(d)==='pending').sort((a,b)=>a.createdAt-b.createdAt);
   const options = state.members.map(m=>`<option value="${m.id}">${escapeHtml(m.code)} — ${escapeHtml(m.name)}</option>`).join('');
+
   document.getElementById('mainContent').innerHTML = `
     <div class="page-header">
-      <div><h1 class="page-title">ฝากเงิน</h1><div class="page-title-sub">บันทึกรายการฝากเงินให้สมาชิก</div></div>
+      <div><h1 class="page-title">ฝากเงิน</h1><div class="page-title-sub">ยืนยันคำขอฝากเงินของสมาชิก หรือบันทึกฝากเงินโดยตรง</div></div>
     </div>
     <hr class="page-divider">
-    <div class="panel" style="max-width:520px;">
+
+    <div class="panel">
+      <div class="panel-head"><h3>คำขอฝากเงินรออนุมัติ</h3><span class="badge badge-gray">${pending.length.toLocaleString('th-TH')} รายการ</span></div>
+      <div class="panel-body">
+        ${pending.length ? `<table><thead><tr><th>วันที่</th><th>สมาชิก</th><th>จำนวนเงิน</th><th>หมายเหตุ</th><th></th></tr></thead><tbody>
+          ${pending.map(d=>{
+            const m = state.members.find(x=>x.id===d.memberId);
+            return `<tr>
+              <td data-label="วันที่">${fmtDate(d.date)}</td>
+              <td data-label="สมาชิก">${escapeHtml(m?m.name:'(ลบแล้ว)')}</td>
+              <td data-label="จำนวนเงิน" class="num">${fmtMoney(d.amount)} ฿</td>
+              <td data-label="หมายเหตุ">${escapeHtml(d.note)||'-'}</td>
+              <td class="no-label" style="text-align:right; white-space:nowrap;">
+                <button class="btn btn-primary btn-sm" style="width:auto;" onclick="approveDeposit('${d.id}')">✓ อนุมัติ</button>
+                <button class="btn btn-danger btn-sm" style="width:auto;" onclick="rejectDeposit('${d.id}')">✕ ปฏิเสธ</button>
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody></table>` : `<div class="empty-state"><div class="e-ico">✅</div>ไม่มีคำขอฝากเงินที่รออนุมัติ</div>`}
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>บันทึกการฝากให้สมาชิก (ยืนยันทันที)</h3></div>
       <div class="panel-body" style="padding-top:16px;">
         ${state.members.length ? `
         <div class="field"><label>เลือกสมาชิก</label>
@@ -844,14 +1007,13 @@ function renderDeposit(){
           <div class="field"><label>จำนวนเงิน (บาท)</label><input type="number" id="depAmount" min="0" step="0.01" placeholder="0.00"></div>
         </div>
         <div class="field"><label>หมายเหตุ</label><input id="depNote" placeholder="ไม่บังคับ"></div>
-        <button class="btn btn-primary" onclick="saveDeposit()">💾 บันทึกการฝาก</button>
-        ` : `<div class="empty-state"><div class="e-ico">👥</div>กรุณาเพิ่มสมาชิกก่อนบันทึกการฝากเงิน
-          <div style="margin-top:10px;"><span class="link-btn" onclick="navigate('members')">+ ไปหน้าสมาชิก</span></div></div>`}
+        <button class="btn btn-primary" onclick="saveDepositDirect()">💾 บันทึกการฝาก</button>
+        ` : `<div class="empty-state"><div class="e-ico">👥</div>ยังไม่มีสมาชิกในระบบ</div>`}
       </div>
     </div>
   `;
 }
-function saveDeposit(){
+function saveDepositDirect(){
   const memberId = document.getElementById('depMemberId').value;
   const date = document.getElementById('depDate').value || todayISO();
   const amount = parseFloat(document.getElementById('depAmount').value);
@@ -864,21 +1026,281 @@ function saveDeposit(){
   const newCount = Number(m.depositCount||0) + 1;
   m.balance = newBalance;
   m.depositCount = newCount;
-  const depositRecord = {id:uid('dep_'), memberId, date, amount, note, createdAt:Date.now()};
+  const depositRecord = {id:uid('dep_'), memberId, date, amount, note, status:'approved', createdAt:Date.now()};
   state.deposits.push(depositRecord);
 
   refMembers.child(memberId).update({balance:newBalance, depositCount:newCount}).catch(err=>showToast('บันทึกไม่สำเร็จ: '+err.message, true));
   refDeposits.child(depositRecord.id).set(depositRecord).catch(err=>showToast('บันทึกไม่สำเร็จ: '+err.message, true));
 
   showToast(`บันทึกการฝากเงิน ${fmtMoney(amount)} ฿ ให้ ${m.name} สำเร็จ`);
-  renderDeposit();
+  renderDepositAdmin();
 }
+function approveDeposit(depId){
+  const d = state.deposits.find(x=>x.id===depId);
+  if(!d || statusOf(d)!=='pending' || typeOf(d)!=='deposit') return;
+  const m = state.members.find(x=>x.id===d.memberId);
+  if(!m){ showToast('ไม่พบสมาชิกของรายการนี้', true); return; }
+  const newBalance = Number(m.balance||0) + Number(d.amount||0);
+  const newCount = Number(m.depositCount||0) + 1;
+  m.balance = newBalance;
+  m.depositCount = newCount;
+  d.status = 'approved';
+
+  refMembers.child(m.id).update({balance:newBalance, depositCount:newCount}).catch(err=>showToast('อัปเดตไม่สำเร็จ: '+err.message, true));
+  refDeposits.child(depId).update({status:'approved'}).catch(err=>showToast('อัปเดตไม่สำเร็จ: '+err.message, true));
+  showToast(`อนุมัติการฝากเงิน ${fmtMoney(d.amount)} ฿ ของ ${m.name} สำเร็จ`);
+  renderDepositAdmin();
+}
+function rejectDeposit(depId){
+  const d = state.deposits.find(x=>x.id===depId);
+  if(!d || statusOf(d)!=='pending' || typeOf(d)!=='deposit') return;
+  if(!confirm('ยืนยันการปฏิเสธคำขอฝากเงินนี้?')) return;
+  d.status = 'rejected';
+  refDeposits.child(depId).update({status:'rejected'}).catch(err=>showToast('อัปเดตไม่สำเร็จ: '+err.message, true));
+  showToast('ปฏิเสธคำขอฝากเงินแล้ว');
+  renderDepositAdmin();
+}
+
+/* --- User (member): request a deposit for their own account --- */
+function renderDepositUser(){
+  const u = currentUser();
+  const m = state.members.find(x=>x.id===u.memberId);
+  const main = document.getElementById('mainContent');
+  if(!m){
+    main.innerHTML = `<div class="empty-state"><div class="e-ico">❓</div>ไม่พบข้อมูลสมาชิกที่ผูกกับบัญชีนี้ กรุณาติดต่อผู้ดูแลระบบ</div>`;
+    return;
+  }
+  const myRequests = state.deposits.filter(d=>d.memberId===m.id && typeOf(d)==='deposit').sort((a,b)=>b.createdAt-a.createdAt).slice(0,10);
+
+  main.innerHTML = `
+    <div class="page-header">
+      <div><h1 class="page-title">ฝากเงิน</h1><div class="page-title-sub">แจ้งฝากเงินเข้าบัญชีของคุณ — ยอดจะอัปเดตหลังผู้ดูแลระบบยืนยัน</div></div>
+    </div>
+    <hr class="page-divider">
+    <div class="grid-cards" style="grid-template-columns:repeat(2,1fr); max-width:520px;">
+      <div class="card"><div class="card-label">ยอดเงินสะสมของฉัน</div><div class="card-value small">${fmtMoney(m.balance)} ฿</div></div>
+      <div class="card"><div class="card-label">รหัสสมาชิก</div><div class="card-value small">${m.code}</div></div>
+    </div>
+    <div class="panel" style="max-width:520px;">
+      <div class="panel-body" style="padding-top:16px;">
+        <div class="row-2">
+          <div class="field"><label>วันที่</label><input type="date" id="depDate" value="${todayISO()}"></div>
+          <div class="field"><label>จำนวนเงิน (บาท)</label><input type="number" id="depAmount" min="0" step="0.01" placeholder="0.00"></div>
+        </div>
+        <div class="field"><label>หมายเหตุ</label><input id="depNote" placeholder="ไม่บังคับ"></div>
+        <button class="btn btn-primary" onclick="saveDepositRequest()">📤 ส่งคำขอฝากเงิน</button>
+      </div>
+    </div>
+    <div class="panel" style="max-width:520px;">
+      <div class="panel-head"><h3>คำขอล่าสุดของฉัน</h3></div>
+      <div class="panel-body">
+        ${myRequests.length ? `<table><thead><tr><th>วันที่</th><th>จำนวนเงิน</th><th>สถานะ</th></tr></thead><tbody>
+          ${myRequests.map(d=>`<tr>
+            <td data-label="วันที่">${fmtDate(d.date)}</td>
+            <td data-label="จำนวนเงิน" class="num">${fmtMoney(d.amount)} ฿</td>
+            <td data-label="สถานะ">${statusBadge(statusOf(d))}</td>
+          </tr>`).join('')}
+        </tbody></table>` : `<div class="empty-state"><div class="e-ico">📭</div>ยังไม่มีคำขอฝากเงิน</div>`}
+      </div>
+    </div>
+  `;
+}
+function saveDepositRequest(){
+  const u = currentUser();
+  const m = state.members.find(x=>x.id===u.memberId);
+  if(!m){ showToast('ไม่พบข้อมูลสมาชิกของคุณ', true); return; }
+  const date = document.getElementById('depDate').value || todayISO();
+  const amount = parseFloat(document.getElementById('depAmount').value);
+  const note = document.getElementById('depNote').value.trim();
+  if(!amount || amount<=0){ showToast('กรุณากรอกจำนวนเงินให้ถูกต้อง', true); return; }
+
+  const depositRecord = {id:uid('dep_'), memberId:m.id, date, amount, note, status:'pending', createdAt:Date.now()};
+  state.deposits.push(depositRecord);
+  refDeposits.child(depositRecord.id).set(depositRecord).catch(err=>showToast('ส่งคำขอไม่สำเร็จ: '+err.message, true));
+
+  showToast('ส่งคำขอฝากเงินสำเร็จ กำลังรอผู้ดูแลระบบยืนยัน');
+  renderDepositUser();
+}
+
+/* ================= WITHDRAW ================= */
+function renderWithdraw(){
+  if(isAdmin()) renderWithdrawAdmin(); else renderWithdrawUser();
+}
+
+/* --- Admin: approve/reject queue + direct entry (auto-approved) --- */
+function renderWithdrawAdmin(){
+  const pending = state.deposits.filter(d=>typeOf(d)==='withdraw' && statusOf(d)==='pending').sort((a,b)=>a.createdAt-b.createdAt);
+  const options = state.members.map(m=>`<option value="${m.id}">${escapeHtml(m.code)} — ${escapeHtml(m.name)} (คงเหลือ ${fmtMoney(m.balance)} ฿)</option>`).join('');
+
+  document.getElementById('mainContent').innerHTML = `
+    <div class="page-header">
+      <div><h1 class="page-title">ถอนเงิน</h1><div class="page-title-sub">ยืนยันคำขอถอนเงินของสมาชิก หรือบันทึกถอนเงินโดยตรง</div></div>
+    </div>
+    <hr class="page-divider">
+
+    <div class="panel">
+      <div class="panel-head"><h3>คำขอถอนเงินรออนุมัติ</h3><span class="badge badge-gray">${pending.length.toLocaleString('th-TH')} รายการ</span></div>
+      <div class="panel-body">
+        ${pending.length ? `<table><thead><tr><th>วันที่</th><th>สมาชิก</th><th>จำนวนเงิน</th><th>ยอดคงเหลือ</th><th>หมายเหตุ</th><th></th></tr></thead><tbody>
+          ${pending.map(d=>{
+            const m = state.members.find(x=>x.id===d.memberId);
+            const insufficient = m && Number(d.amount||0) > Number(m.balance||0);
+            return `<tr>
+              <td data-label="วันที่">${fmtDate(d.date)}</td>
+              <td data-label="สมาชิก">${escapeHtml(m?m.name:'(ลบแล้ว)')}</td>
+              <td data-label="จำนวนเงิน" class="num">${fmtMoney(d.amount)} ฿</td>
+              <td data-label="ยอดคงเหลือ" class="num">${m?fmtMoney(m.balance)+' ฿':'-'}${insufficient?' <span style="color:var(--danger); font-size:12px;">(ไม่พอ)</span>':''}</td>
+              <td data-label="หมายเหตุ">${escapeHtml(d.note)||'-'}</td>
+              <td class="no-label" style="text-align:right; white-space:nowrap;">
+                <button class="btn btn-primary btn-sm" style="width:auto;" onclick="approveWithdraw('${d.id}')">✓ อนุมัติ</button>
+                <button class="btn btn-danger btn-sm" style="width:auto;" onclick="rejectWithdraw('${d.id}')">✕ ปฏิเสธ</button>
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody></table>` : `<div class="empty-state"><div class="e-ico">✅</div>ไม่มีคำขอถอนเงินที่รออนุมัติ</div>`}
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>บันทึกการถอนให้สมาชิก (ยืนยันทันที)</h3></div>
+      <div class="panel-body" style="padding-top:16px;">
+        ${state.members.length ? `
+        <div class="field"><label>เลือกสมาชิก</label>
+          <select id="wdMemberId">
+            <option value="">-- เลือกสมาชิก --</option>
+            ${options}
+          </select>
+        </div>
+        <div class="row-2">
+          <div class="field"><label>วันที่</label><input type="date" id="wdDate" value="${todayISO()}"></div>
+          <div class="field"><label>จำนวนเงิน (บาท)</label><input type="number" id="wdAmount" min="0" step="0.01" placeholder="0.00"></div>
+        </div>
+        <div class="field"><label>หมายเหตุ</label><input id="wdNote" placeholder="ไม่บังคับ"></div>
+        <button class="btn btn-primary" onclick="saveWithdrawDirect()">💾 บันทึกการถอน</button>
+        ` : `<div class="empty-state"><div class="e-ico">👥</div>ยังไม่มีสมาชิกในระบบ</div>`}
+      </div>
+    </div>
+  `;
+}
+function saveWithdrawDirect(){
+  const memberId = document.getElementById('wdMemberId').value;
+  const date = document.getElementById('wdDate').value || todayISO();
+  const amount = parseFloat(document.getElementById('wdAmount').value);
+  const note = document.getElementById('wdNote').value.trim();
+  if(!memberId){ showToast('กรุณาเลือกสมาชิก', true); return; }
+  if(!amount || amount<=0){ showToast('กรุณากรอกจำนวนเงินให้ถูกต้อง', true); return; }
+
+  const m = state.members.find(x=>x.id===memberId);
+  if(amount > Number(m.balance||0)){ showToast(`ยอดเงินสะสมของ ${m.name} ไม่เพียงพอ (คงเหลือ ${fmtMoney(m.balance)} ฿)`, true); return; }
+
+  const newBalance = Number(m.balance||0) - amount;
+  m.balance = newBalance;
+  const withdrawRecord = {id:uid('wd_'), memberId, date, amount, note, type:'withdraw', status:'approved', createdAt:Date.now()};
+  state.deposits.push(withdrawRecord);
+
+  refMembers.child(memberId).update({balance:newBalance}).catch(err=>showToast('บันทึกไม่สำเร็จ: '+err.message, true));
+  refDeposits.child(withdrawRecord.id).set(withdrawRecord).catch(err=>showToast('บันทึกไม่สำเร็จ: '+err.message, true));
+
+  showToast(`บันทึกการถอนเงิน ${fmtMoney(amount)} ฿ ของ ${m.name} สำเร็จ`);
+  renderWithdrawAdmin();
+}
+function approveWithdraw(depId){
+  const d = state.deposits.find(x=>x.id===depId);
+  if(!d || statusOf(d)!=='pending' || typeOf(d)!=='withdraw') return;
+  const m = state.members.find(x=>x.id===d.memberId);
+  if(!m){ showToast('ไม่พบสมาชิกของรายการนี้', true); return; }
+  if(Number(d.amount||0) > Number(m.balance||0)){ showToast(`ยอดเงินสะสมของ ${m.name} ไม่เพียงพอสำหรับการถอนนี้ (คงเหลือ ${fmtMoney(m.balance)} ฿)`, true); return; }
+  const newBalance = Number(m.balance||0) - Number(d.amount||0);
+  m.balance = newBalance;
+  d.status = 'approved';
+
+  refMembers.child(m.id).update({balance:newBalance}).catch(err=>showToast('อัปเดตไม่สำเร็จ: '+err.message, true));
+  refDeposits.child(depId).update({status:'approved'}).catch(err=>showToast('อัปเดตไม่สำเร็จ: '+err.message, true));
+  showToast(`อนุมัติการถอนเงิน ${fmtMoney(d.amount)} ฿ ของ ${m.name} สำเร็จ`);
+  renderWithdrawAdmin();
+}
+function rejectWithdraw(depId){
+  const d = state.deposits.find(x=>x.id===depId);
+  if(!d || statusOf(d)!=='pending' || typeOf(d)!=='withdraw') return;
+  if(!confirm('ยืนยันการปฏิเสธคำขอถอนเงินนี้?')) return;
+  d.status = 'rejected';
+  refDeposits.child(depId).update({status:'rejected'}).catch(err=>showToast('อัปเดตไม่สำเร็จ: '+err.message, true));
+  showToast('ปฏิเสธคำขอถอนเงินแล้ว');
+  renderWithdrawAdmin();
+}
+
+/* --- User (member): request a withdrawal from their own account --- */
+function renderWithdrawUser(){
+  const u = currentUser();
+  const m = state.members.find(x=>x.id===u.memberId);
+  const main = document.getElementById('mainContent');
+  if(!m){
+    main.innerHTML = `<div class="empty-state"><div class="e-ico">❓</div>ไม่พบข้อมูลสมาชิกที่ผูกกับบัญชีนี้ กรุณาติดต่อผู้ดูแลระบบ</div>`;
+    return;
+  }
+  const myRequests = state.deposits.filter(d=>d.memberId===m.id && typeOf(d)==='withdraw').sort((a,b)=>b.createdAt-a.createdAt).slice(0,10);
+
+  main.innerHTML = `
+    <div class="page-header">
+      <div><h1 class="page-title">ถอนเงิน</h1><div class="page-title-sub">แจ้งถอนเงินจากบัญชีของคุณ — ยอดจะอัปเดตหลังผู้ดูแลระบบยืนยัน</div></div>
+    </div>
+    <hr class="page-divider">
+    <div class="grid-cards" style="grid-template-columns:repeat(2,1fr); max-width:520px;">
+      <div class="card"><div class="card-label">ยอดเงินสะสมของฉัน</div><div class="card-value small">${fmtMoney(m.balance)} ฿</div></div>
+      <div class="card"><div class="card-label">รหัสสมาชิก</div><div class="card-value small">${m.code}</div></div>
+    </div>
+    <div class="panel" style="max-width:520px;">
+      <div class="panel-body" style="padding-top:16px;">
+        <div class="row-2">
+          <div class="field"><label>วันที่</label><input type="date" id="wdDate" value="${todayISO()}"></div>
+          <div class="field"><label>จำนวนเงิน (บาท)</label><input type="number" id="wdAmount" min="0" step="0.01" placeholder="0.00"></div>
+        </div>
+        <div class="field"><label>หมายเหตุ</label><input id="wdNote" placeholder="ไม่บังคับ"></div>
+        <button class="btn btn-primary" onclick="saveWithdrawRequest()">📤 ส่งคำขอถอนเงิน</button>
+      </div>
+    </div>
+    <div class="panel" style="max-width:520px;">
+      <div class="panel-head"><h3>คำขอล่าสุดของฉัน</h3></div>
+      <div class="panel-body">
+        ${myRequests.length ? `<table><thead><tr><th>วันที่</th><th>จำนวนเงิน</th><th>สถานะ</th></tr></thead><tbody>
+          ${myRequests.map(d=>`<tr>
+            <td data-label="วันที่">${fmtDate(d.date)}</td>
+            <td data-label="จำนวนเงิน" class="num">${fmtMoney(d.amount)} ฿</td>
+            <td data-label="สถานะ">${statusBadge(statusOf(d))}</td>
+          </tr>`).join('')}
+        </tbody></table>` : `<div class="empty-state"><div class="e-ico">📭</div>ยังไม่มีคำขอถอนเงิน</div>`}
+      </div>
+    </div>
+  `;
+}
+function saveWithdrawRequest(){
+  const u = currentUser();
+  const m = state.members.find(x=>x.id===u.memberId);
+  if(!m){ showToast('ไม่พบข้อมูลสมาชิกของคุณ', true); return; }
+  const date = document.getElementById('wdDate').value || todayISO();
+  const amount = parseFloat(document.getElementById('wdAmount').value);
+  const note = document.getElementById('wdNote').value.trim();
+  if(!amount || amount<=0){ showToast('กรุณากรอกจำนวนเงินให้ถูกต้อง', true); return; }
+  if(amount > Number(m.balance||0)){ showToast(`ยอดเงินสะสมของคุณไม่เพียงพอ (คงเหลือ ${fmtMoney(m.balance)} ฿)`, true); return; }
+
+  const withdrawRecord = {id:uid('wd_'), memberId:m.id, date, amount, note, type:'withdraw', status:'pending', createdAt:Date.now()};
+  state.deposits.push(withdrawRecord);
+  refDeposits.child(withdrawRecord.id).set(withdrawRecord).catch(err=>showToast('ส่งคำขอไม่สำเร็จ: '+err.message, true));
+
+  showToast('ส่งคำขอถอนเงินสำเร็จ กำลังรอผู้ดูแลระบบยืนยัน');
+  renderWithdrawUser();
+}
+
 
 /* ================= HISTORY ================= */
 let historySearch = '';
 function renderHistory(){
   const term = historySearch.toLowerCase();
-  let rows = state.deposits.map(d => ({...d, member: state.members.find(m=>m.id===d.memberId)}));
+  const isAdminView = isAdmin();
+  const myMemberId = isAdminView ? null : (currentUser()||{}).memberId;
+  let rows = state.deposits
+    .filter(d => isAdminView || d.memberId === myMemberId)
+    .map(d => ({...d, member: state.members.find(m=>m.id===d.memberId)}));
   if(term){
     rows = rows.filter(r => (r.member?.name||'').toLowerCase().includes(term) || (r.date||'').includes(term));
   }
@@ -886,19 +1308,21 @@ function renderHistory(){
 
   document.getElementById('mainContent').innerHTML = `
     <div class="page-header">
-      <div><h1 class="page-title">ประวัติการฝากเงิน</h1><div class="page-title-sub">ทั้งหมด ${state.deposits.length.toLocaleString('th-TH')} รายการ</div></div>
+      <div><h1 class="page-title">ประวัติการทำรายการ</h1><div class="page-title-sub">ทั้งหมด ${rows.length.toLocaleString('th-TH')} รายการ</div></div>
     </div>
     <hr class="page-divider">
     <div class="panel">
       <div class="panel-head">
-        <div class="search-box"><span>🔍</span><input placeholder="ค้นหาชื่อสมาชิก หรือ วันที่ (เช่น 2026-07)" value="${escapeHtml(historySearch)}" oninput="historySearch=this.value; renderHistory();"></div>
+        <div class="search-box"><span>🔍</span><input placeholder="${isAdminView?'ค้นหาชื่อสมาชิก หรือ วันที่ (เช่น 2026-07)':'ค้นหาวันที่ (เช่น 2026-07)'}" value="${escapeHtml(historySearch)}" oninput="historySearch=this.value; renderHistory();"></div>
       </div>
       <div class="panel-body">
-        ${rows.length ? `<table><thead><tr><th>วันที่</th><th>สมาชิก</th><th>จำนวนเงิน</th><th>หมายเหตุ</th></tr></thead><tbody>
+        ${rows.length ? `<table><thead><tr><th>วันที่</th>${isAdminView?'<th>สมาชิก</th>':''}<th>ประเภท</th><th>จำนวนเงิน</th><th>สถานะ</th><th>หมายเหตุ</th></tr></thead><tbody>
           ${rows.map(d=>`<tr>
             <td data-label="วันที่">${fmtDate(d.date)}</td>
-            <td data-label="สมาชิก">${escapeHtml(d.member?d.member.name:'(ลบแล้ว)')}</td>
-            <td data-label="จำนวนเงิน" class="num">${fmtMoney(d.amount)} ฿</td>
+            ${isAdminView?`<td data-label="สมาชิก">${escapeHtml(d.member?d.member.name:'(ลบแล้ว)')}</td>`:''}
+            <td data-label="ประเภท">${typeBadge(typeOf(d))}</td>
+            <td data-label="จำนวนเงิน" class="num">${amountDisplay(d)}</td>
+            <td data-label="สถานะ">${statusBadge(statusOf(d))}</td>
             <td data-label="หมายเหตุ">${escapeHtml(d.note)||'-'}</td>
           </tr>`).join('')}
         </tbody></table>` : `<div class="empty-state"><div class="e-ico">🔎</div>ไม่พบรายการที่ค้นหา</div>`}
@@ -910,30 +1334,40 @@ function renderHistory(){
 /* ================= REPORTS ================= */
 function renderReports(){
   const totalBalance = state.members.reduce((s,m)=>s+Number(m.balance||0),0);
+  const approvedDeposits = state.deposits.filter(d=>statusOf(d)==='approved');
+  const totalWithdrawn = approvedDeposits.filter(d=>typeOf(d)==='withdraw').reduce((s,d)=>s+Number(d.amount||0),0);
   const monthly = {};
-  state.deposits.forEach(d=>{
+  approvedDeposits.forEach(d=>{
     const ym = (d.date||'').slice(0,7);
-    monthly[ym] = (monthly[ym]||0) + Number(d.amount||0);
+    if(!monthly[ym]) monthly[ym] = {in:0, out:0};
+    if(typeOf(d)==='withdraw') monthly[ym].out += Number(d.amount||0);
+    else monthly[ym].in += Number(d.amount||0);
   });
   const monthKeys = Object.keys(monthly).sort().reverse();
   const topMember = [...state.members].sort((a,b)=>(b.balance||0)-(a.balance||0))[0];
 
   document.getElementById('mainContent').innerHTML = `
     <div class="page-header">
-      <div><h1 class="page-title">รายงาน</h1><div class="page-title-sub">สรุปภาพรวมกองทุน</div></div>
+      <div><h1 class="page-title">รายงาน</h1><div class="page-title-sub">สรุปภาพรวมกองทุน (นับเฉพาะรายการที่อนุมัติแล้ว)</div></div>
       <button class="btn btn-outline" style="width:auto;" onclick="exportExcel()">⬇ Export Excel</button>
     </div>
     <hr class="page-divider">
-    <div class="grid-cards" style="grid-template-columns:repeat(3,1fr);">
-      <div class="card"><div class="card-label">ยอดเงินฝากรวมทั้งหมด</div><div class="card-value small">${fmtMoney(totalBalance)} ฿</div></div>
+    <div class="grid-cards" style="grid-template-columns:repeat(4,1fr);">
+      <div class="card"><div class="card-label">ยอดคงเหลือรวมทั้งหมด</div><div class="card-value small">${fmtMoney(totalBalance)} ฿</div></div>
+      <div class="card"><div class="card-label">ยอดถอนเงินรวมทั้งหมด</div><div class="card-value small">${fmtMoney(totalWithdrawn)} ฿</div></div>
       <div class="card"><div class="card-label">จำนวนสมาชิกทั้งหมด</div><div class="card-value">${state.members.length.toLocaleString('th-TH')}</div></div>
       <div class="card"><div class="card-label">สมาชิกยอดฝากสูงสุด</div><div class="card-value small">${topMember?escapeHtml(topMember.name):'-'}</div></div>
     </div>
     <div class="panel">
-      <div class="panel-head"><h3>ยอดฝากรายเดือน</h3></div>
+      <div class="panel-head"><h3>ยอดฝากเข้า / ถอนออก รายเดือน</h3></div>
       <div class="panel-body">
-        ${monthKeys.length ? `<table><thead><tr><th>เดือน</th><th>ยอดฝากรวม</th></tr></thead><tbody>
-          ${monthKeys.map(ym=>`<tr><td data-label="เดือน">${ym}</td><td data-label="ยอดฝากรวม" class="num">${fmtMoney(monthly[ym])} ฿</td></tr>`).join('')}
+        ${monthKeys.length ? `<table><thead><tr><th>เดือน</th><th>ฝากเข้า</th><th>ถอนออก</th><th>สุทธิ</th></tr></thead><tbody>
+          ${monthKeys.map(ym=>`<tr>
+            <td data-label="เดือน">${ym}</td>
+            <td data-label="ฝากเข้า" class="num">${fmtMoney(monthly[ym].in)} ฿</td>
+            <td data-label="ถอนออก" class="num">${fmtMoney(monthly[ym].out)} ฿</td>
+            <td data-label="สุทธิ" class="num">${fmtMoney(monthly[ym].in - monthly[ym].out)} ฿</td>
+          </tr>`).join('')}
         </tbody></table>` : `<div class="empty-state"><div class="e-ico">📭</div>ยังไม่มีข้อมูล</div>`}
       </div>
     </div>
@@ -949,23 +1383,178 @@ function exportExcel(){
   }));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(memberRows), 'สมาชิก');
 
+  const statusLabel = {pending:'รออนุมัติ', approved:'อนุมัติแล้ว', rejected:'ถูกปฏิเสธ'};
+  const typeLabel = {deposit:'ฝากเงิน', dividend:'ปันผล', withdraw:'ถอนเงิน'};
   const depRows = state.deposits.map(d=>{
     const m = state.members.find(x=>x.id===d.memberId);
-    return {'วันที่':d.date, 'รหัสสมาชิก':m?m.code:'', 'ชื่อสมาชิก':m?m.name:'(ลบแล้ว)', 'จำนวนเงิน':Number(d.amount||0), 'หมายเหตุ':d.note};
+    return {'วันที่':d.date, 'รหัสสมาชิก':m?m.code:'', 'ชื่อสมาชิก':m?m.name:'(ลบแล้ว)', 'ประเภท':typeLabel[typeOf(d)], 'จำนวนเงิน':Number(d.amount||0), 'สถานะ':statusLabel[statusOf(d)], 'หมายเหตุ':d.note};
   });
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(depRows), 'ประวัติการฝาก');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(depRows), 'ประวัติการทำรายการ');
 
+  const approvedDeposits = state.deposits.filter(d=>statusOf(d)==='approved');
+  const totalWithdrawn = approvedDeposits.filter(d=>typeOf(d)==='withdraw').reduce((s,d)=>s+Number(d.amount||0),0);
   const monthly = {};
-  state.deposits.forEach(d=>{ const ym=(d.date||'').slice(0,7); monthly[ym]=(monthly[ym]||0)+Number(d.amount||0); });
+  approvedDeposits.forEach(d=>{
+    const ym=(d.date||'').slice(0,7);
+    if(!monthly[ym]) monthly[ym] = {in:0, out:0};
+    if(typeOf(d)==='withdraw') monthly[ym].out += Number(d.amount||0); else monthly[ym].in += Number(d.amount||0);
+  });
   const summaryRows = [
-    {'รายการ':'ยอดเงินฝากรวมทั้งหมด', 'จำนวน':state.members.reduce((s,m)=>s+Number(m.balance||0),0)},
+    {'รายการ':'ยอดคงเหลือรวมทั้งหมด', 'จำนวน':state.members.reduce((s,m)=>s+Number(m.balance||0),0)},
+    {'รายการ':'ยอดถอนเงินรวมทั้งหมด', 'จำนวน':totalWithdrawn},
     {'รายการ':'จำนวนสมาชิกทั้งหมด', 'จำนวน':state.members.length},
-    ...Object.keys(monthly).sort().map(ym=>({'รายการ':'ยอดฝากเดือน '+ym, 'จำนวน':monthly[ym]})),
+    ...Object.keys(monthly).sort().flatMap(ym=>([
+      {'รายการ':'ยอดฝากเข้าเดือน '+ym, 'จำนวน':monthly[ym].in},
+      {'รายการ':'ยอดถอนออกเดือน '+ym, 'จำนวน':monthly[ym].out},
+    ])),
   ];
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryRows), 'สรุป');
 
   XLSX.writeFile(wb, `รายงานกองทุน_${todayISO()}.xlsx`);
   showToast('Export ไฟล์ Excel สำเร็จ');
+}
+
+/* ================= DIVIDEND ================= */
+let pendingDividendPreview = null;
+let pendingDividendMeta = null;
+
+function renderDividend(){
+  if(!isAdmin()){
+    document.getElementById('mainContent').innerHTML = `<div class="empty-state"><div class="e-ico">🔒</div>เฉพาะผู้ดูแลระบบเท่านั้นที่เข้าถึงหน้านี้ได้</div>`;
+    return;
+  }
+  pendingDividendPreview = null;
+  pendingDividendMeta = null;
+
+  const rounds = {};
+  state.deposits.filter(d=>typeOf(d)==='dividend').forEach(d=>{
+    const rid = d.roundId || d.id;
+    if(!rounds[rid]) rounds[rid] = {roundId:rid, date:d.date, note:d.note, total:0, count:0, createdAt:d.createdAt};
+    rounds[rid].total += Number(d.amount||0);
+    rounds[rid].count += 1;
+    rounds[rid].createdAt = Math.max(rounds[rid].createdAt, d.createdAt);
+  });
+  const roundList = Object.values(rounds).sort((a,b)=>b.createdAt-a.createdAt);
+
+  document.getElementById('mainContent').innerHTML = `
+    <div class="page-header">
+      <div><h1 class="page-title">ปันผล</h1><div class="page-title-sub">คำนวณและจ่ายเงินปันผลให้สมาชิกตามยอดเงินสะสม</div></div>
+    </div>
+    <hr class="page-divider">
+
+    <div class="panel" style="max-width:560px;">
+      <div class="panel-head"><h3>จ่ายเงินปันผลรอบใหม่</h3></div>
+      <div class="panel-body" style="padding-top:16px;">
+        <div class="row-2">
+          <div class="field"><label>วันที่ปันผล</label><input type="date" id="divDate" value="${todayISO()}"></div>
+          <div class="field"><label>วิธีคำนวณ</label>
+            <select id="divMode" onchange="updateDivModeLabel()">
+              <option value="rate">อัตราร้อยละของยอดเงินสะสม (%)</option>
+              <option value="fixed">กำหนดยอดเงินรวม แบ่งตามสัดส่วนยอดคงเหลือ</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label id="divValueLabel">อัตราปันผล (%)</label>
+          <input type="number" id="divValue" min="0" step="0.01" placeholder="เช่น 2.5">
+        </div>
+        <div class="field"><label>หมายเหตุ</label><input id="divNote" placeholder="เช่น ปันผลประจำปี 2569"></div>
+        <button class="btn btn-outline" onclick="previewDividend()">🔍 คำนวณตัวอย่าง</button>
+        <div id="dividendPreviewArea" style="margin-top:16px;"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>ประวัติการปันผลที่ผ่านมา</h3></div>
+      <div class="panel-body">
+        ${roundList.length ? `<table><thead><tr><th>วันที่</th><th>สมาชิกที่ได้รับ</th><th>ยอดรวมที่จ่าย</th><th>หมายเหตุ</th><th></th></tr></thead><tbody>
+          ${roundList.map(r=>`<tr>
+            <td data-label="วันที่">${fmtDate(r.date)}</td>
+            <td data-label="สมาชิกที่ได้รับ">${r.count.toLocaleString('th-TH')} คน</td>
+            <td data-label="ยอดรวมที่จ่าย" class="num">${fmtMoney(r.total)} ฿</td>
+            <td data-label="หมายเหตุ">${escapeHtml(r.note)||'-'}</td>
+            <td class="no-label" style="text-align:right;"><span class="link-btn" onclick="historySearch='${r.date}'; navigate('history');">ดูรายการ →</span></td>
+          </tr>`).join('')}
+        </tbody></table>` : `<div class="empty-state"><div class="e-ico">🎁</div>ยังไม่มีการจ่ายปันผล</div>`}
+      </div>
+    </div>
+  `;
+}
+function updateDivModeLabel(){
+  const mode = document.getElementById('divMode').value;
+  document.getElementById('divValueLabel').textContent = mode==='rate' ? 'อัตราปันผล (%)' : 'ยอดเงินรวมที่จะแบ่งปันผล (บาท)';
+  document.getElementById('divValue').placeholder = mode==='rate' ? 'เช่น 2.5' : 'เช่น 50000';
+}
+function previewDividend(){
+  const date = document.getElementById('divDate').value || todayISO();
+  const mode = document.getElementById('divMode').value;
+  const value = parseFloat(document.getElementById('divValue').value);
+  const note = document.getElementById('divNote').value.trim();
+  const area = document.getElementById('dividendPreviewArea');
+
+  if(!value || value<=0){ showToast('กรุณากรอกตัวเลขให้ถูกต้อง', true); return; }
+  const eligible = state.members.filter(m => Number(m.balance||0) > 0);
+  if(!eligible.length){ showToast('ไม่มีสมาชิกที่มียอดเงินสะสมมากกว่า 0', true); return; }
+
+  const totalBalance = eligible.reduce((s,m)=>s+Number(m.balance||0),0);
+  let entries;
+  if(mode==='rate'){
+    entries = eligible.map(m => ({m, amount: Math.round(Number(m.balance||0) * value/100 * 100)/100}));
+  }else{
+    entries = eligible.map(m => ({m, amount: Math.round((Number(m.balance||0)/totalBalance) * value * 100)/100}));
+  }
+  entries = entries.filter(e => e.amount > 0);
+  const total = entries.reduce((s,e)=>s+e.amount,0);
+
+  pendingDividendPreview = entries;
+  pendingDividendMeta = {date, mode, value, note};
+
+  area.innerHTML = `
+    <div style="border:1.5px dashed var(--border); border-radius:10px; padding:14px; margin-top:6px;">
+      <div style="font-size:13.8px; font-weight:600; margin-bottom:10px;">ตัวอย่างการจ่ายปันผล — ${entries.length.toLocaleString('th-TH')} คน รวม ${fmtMoney(total)} ฿</div>
+      <div style="max-height:280px; overflow-y:auto;">
+        <table><thead><tr><th>สมาชิก</th><th>ยอดก่อน</th><th>ปันผลที่ได้</th></tr></thead><tbody>
+          ${entries.map(e=>`<tr>
+            <td data-label="สมาชิก">${escapeHtml(e.m.name)}</td>
+            <td data-label="ยอดก่อน" class="num">${fmtMoney(e.m.balance)} ฿</td>
+            <td data-label="ปันผลที่ได้" class="num">+${fmtMoney(e.amount)} ฿</td>
+          </tr>`).join('')}
+        </tbody></table>
+      </div>
+      <div style="display:flex; gap:10px; margin-top:14px;">
+        <button class="btn btn-primary" style="width:auto;" onclick="confirmDividend()">✓ ยืนยันจ่ายปันผล</button>
+        <button class="btn btn-ghost" onclick="document.getElementById('dividendPreviewArea').innerHTML=''; pendingDividendPreview=null;">ยกเลิก</button>
+      </div>
+    </div>
+  `;
+}
+function confirmDividend(){
+  if(!pendingDividendPreview || !pendingDividendPreview.length){ showToast('กรุณาคำนวณตัวอย่างก่อน', true); return; }
+  if(!confirm(`ยืนยันจ่ายเงินปันผลให้สมาชิก ${pendingDividendPreview.length} คน?`)) return;
+
+  const roundId = uid('divround_');
+  const meta = pendingDividendMeta;
+  const defaultNote = meta.note || (meta.mode==='rate' ? `ปันผล ${meta.value}%` : 'ปันผลกองทุน');
+  const updates = {};
+  let totalDistributed = 0;
+
+  pendingDividendPreview.forEach(({m, amount})=>{
+    const newBalance = Number(m.balance||0) + amount;
+    const depId = uid('div_');
+    const depRecord = {id:depId, memberId:m.id, date:meta.date, amount, note:defaultNote, type:'dividend', status:'approved', roundId, createdAt:Date.now()};
+    updates['deposits/'+depId] = depRecord;
+    updates['members/'+m.id+'/balance'] = newBalance;
+    m.balance = newBalance;
+    state.deposits.push(depRecord);
+    totalDistributed += amount;
+  });
+
+  db.ref().update(updates).catch(err=>showToast('บันทึกปันผลไม่สำเร็จบางส่วน: '+err.message, true));
+
+  showToast(`จ่ายเงินปันผลรวม ${fmtMoney(totalDistributed)} ฿ ให้สมาชิก ${pendingDividendPreview.length} คน สำเร็จ`);
+  pendingDividendPreview = null;
+  pendingDividendMeta = null;
+  renderDividend();
 }
 
 /* ================= SETTINGS ================= */
@@ -1009,6 +1598,14 @@ function renderSettingsGeneral(){
         <div class="field"><label>ชื่อกองทุน</label><input id="setFundName" value="${escapeHtml(s.fundName)}"></div>
         <div class="field"><label>ที่อยู่</label><textarea id="setAddress" rows="2">${escapeHtml(s.address)}</textarea></div>
         <div class="field"><label>เบอร์โทร</label><input id="setPhone" value="${escapeHtml(s.phone)}"></div>
+        <div class="field">
+          <label>รหัสเชิญลงทะเบียน (Invitation Code)</label>
+          <div style="display:flex; gap:8px;">
+            <input id="setInviteCode" value="${escapeHtml(s.invitationCode||'')}" placeholder="เช่น BG2569">
+            <button type="button" class="btn btn-outline btn-sm" style="width:auto; white-space:nowrap;" onclick="generateInviteCode()">🎲 สุ่มรหัส</button>
+          </div>
+          <div style="font-size:12px; color:var(--text-muted); margin-top:6px;">แจกรหัสนี้ให้เฉพาะคนที่ต้องการให้ลงทะเบียนเป็นสมาชิกได้ (สิทธิ์ User) ถ้าเว้นว่างจะปิดการลงทะเบียนทันที</div>
+        </div>
         <button class="btn btn-primary" onclick="saveSettings()">💾 บันทึกการตั้งค่า</button>
       </div>
     </div>
@@ -1031,11 +1628,16 @@ function resetLogoToDefault(){
   pendingLogo = '🌿';
   renderLogoInto(document.getElementById('logoPreview'), pendingLogo);
 }
+function generateInviteCode(){
+  const code = Math.random().toString(36).slice(2,8).toUpperCase();
+  document.getElementById('setInviteCode').value = code;
+}
 function saveSettings(){
   state.settings.fundName = document.getElementById('setFundName').value.trim() || 'ระบบกองทุนเงินฝาก';
   if(pendingLogo !== undefined) state.settings.logo = pendingLogo;
   state.settings.address = document.getElementById('setAddress').value.trim();
   state.settings.phone = document.getElementById('setPhone').value.trim();
+  state.settings.invitationCode = document.getElementById('setInviteCode').value.trim();
   persistSettings();
   applyBranding();
   renderSettingsGeneral();
@@ -1113,6 +1715,7 @@ function deleteUser(username){
 async function boot(){
   document.getElementById('loginPass').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
   document.getElementById('loginUser').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
+  document.getElementById('regPasswordConfirm').addEventListener('keydown', e=>{ if(e.key==='Enter') doRegister(); });
 
   applyBranding();
   try{
