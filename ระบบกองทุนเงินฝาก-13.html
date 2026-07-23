@@ -449,7 +449,7 @@ const firebaseConfig = {
 };
 
 const SESSION_KEY = 'gf_session';
-let db, refMembers, refDeposits, refUsers, refSettings;
+let db, refMembers, refDeposits, refUsers, refSettings, refLoans;
 let dataReady = false;
 
 function snapToArray(snap){
@@ -465,6 +465,7 @@ function arrayToKeyedObj(arr, keyFn){
 let state = {
   members: [],
   deposits: [],
+  loans: [],
   users: [],
   settings: {fundName:'ระบบกองทุนเงินฝาก', logo:'🌿', address:'', phone:''},
   currentView: 'dashboard',
@@ -478,9 +479,10 @@ async function initFirebaseData(){
   refDeposits = db.ref('deposits');
   refUsers = db.ref('users');
   refSettings = db.ref('settings');
+  refLoans = db.ref('loans');
 
-  const [settingsSnap, usersSnap, membersSnap, depositsSnap] = await Promise.all([
-    refSettings.once('value'), refUsers.once('value'), refMembers.once('value'), refDeposits.once('value')
+  const [settingsSnap, usersSnap, membersSnap, depositsSnap, loansSnap] = await Promise.all([
+    refSettings.once('value'), refUsers.once('value'), refMembers.once('value'), refDeposits.once('value'), refLoans.once('value')
   ]);
 
   state.settings = settingsSnap.exists() ? settingsSnap.val() : state.settings;
@@ -494,12 +496,14 @@ async function initFirebaseData(){
   }
   state.members = snapToArray(membersSnap);
   state.deposits = snapToArray(depositsSnap);
+  state.loans = snapToArray(loansSnap);
 
   // live sync: reflect changes made from other devices/tabs
   refMembers.on('value', snap => { state.members = snapToArray(snap); onRemoteUpdate(); });
   refDeposits.on('value', snap => { state.deposits = snapToArray(snap); onRemoteUpdate(); });
   refUsers.on('value', snap => { state.users = snapToArray(snap); onRemoteUpdate(); });
   refSettings.on('value', snap => { if(snap.exists()){ state.settings = snap.val(); applyBranding(); } onRemoteUpdate(); });
+  refLoans.on('value', snap => { state.loans = snapToArray(snap); onRemoteUpdate(); });
 }
 
 function onRemoteUpdate(){
@@ -665,12 +669,12 @@ function applyBranding(){
 const NAV_ITEMS = [
   {id:'dashboard', label:'Dashboard', ico:'🏠'},
   {id:'members', label:'สมาชิก', ico:'👥'},
-  {id:'deposit', label:'ฝากเงิน', ico:'💰'},
-  {id:'withdraw', label:'ถอนเงิน', ico:'💸'},
+  {id:'deposit', label:'ฝากเงิน', ico:'💰', adminOnly:true},
+  {id:'withdraw', label:'ถอนเงิน', ico:'💸', adminOnly:true},
   {id:'history', label:'ประวัติการทำรายการ', ico:'📜'},
   {id:'reports', label:'รายงาน', ico:'📊'},
-  {id:'dividend', label:'ปันผล', ico:'🎁', adminOnly:true},
-  {id:'settings', label:'ตั้งค่าระบบ', ico:'⚙️'},
+  {id:'loan', label:'สินเชื่อ', ico:'💳'},
+  {id:'settings', label:'ตั้งค่าระบบ', ico:'⚙️', adminOnly:true},
 ];
 function renderNav(){
   const nav = document.getElementById('navList');
@@ -698,7 +702,7 @@ function navigate(view, param){
     withdraw: renderWithdraw,
     history: renderHistory,
     reports: renderReports,
-    dividend: renderDividend,
+    loan: renderLoan,
     settings: renderSettings,
   };
   (renderers[view] || renderDashboard)();
@@ -711,9 +715,6 @@ function renderDashboard(){
   const totalBalance = state.members.reduce((s,m)=>s+Number(m.balance||0),0);
   const today = todayISO();
   const approvedDeposits = state.deposits.filter(d=>statusOf(d)==='approved');
-  const pendingDepositCount = state.deposits.filter(d=>typeOf(d)==='deposit' && statusOf(d)==='pending').length;
-  const pendingWithdrawCount = state.deposits.filter(d=>typeOf(d)==='withdraw' && statusOf(d)==='pending').length;
-  const pendingCount = pendingDepositCount + pendingWithdrawCount;
   const todayCount = approvedDeposits.filter(d=>d.date===today).length;
   const latest = [...approvedDeposits].sort((a,b)=> b.createdAt - a.createdAt).slice(0,10);
   const topMembers = [...state.members].sort((a,b)=> (b.balance||0)-(a.balance||0)).slice(0,5);
@@ -730,8 +731,7 @@ function renderDashboard(){
       <div class="card"><div class="card-label">สมาชิกทั้งหมด</div><div class="card-value">${totalMembers.toLocaleString('th-TH')}</div></div>
       <div class="card"><div class="card-label">ยอดคงเหลือรวม</div><div class="card-value small">${fmtMoney(totalBalance)} ฿</div></div>
       <div class="card"><div class="card-label">รายการวันนี้</div><div class="card-value">${todayCount.toLocaleString('th-TH')}</div></div>
-      ${isAdmin() ? `<div class="card" ${pendingCount?'style="cursor:pointer;"':''} ${pendingCount?`onclick="navigate('${pendingDepositCount>0?'deposit':'withdraw'}')"`:''}><div class="card-label">คำขอรออนุมัติ</div><div class="card-value" style="${pendingCount?'color:#9a6b00;':''}">${pendingCount.toLocaleString('th-TH')}</div></div>`
-      : `<div class="card"><div class="card-label">จำนวนรายการทั้งหมด</div><div class="card-value">${approvedDeposits.length.toLocaleString('th-TH')}</div></div>`}
+      <div class="card"><div class="card-label">จำนวนรายการทั้งหมด</div><div class="card-value">${approvedDeposits.length.toLocaleString('th-TH')}</div></div>
     </div>
 
     <div class="panel">
@@ -826,9 +826,7 @@ function memberModalHTML(){
   </div>`;
 }
 function canEditMember(id){
-  if(isAdmin()) return true;
-  const u = currentUser();
-  return !!u && u.memberId === id;
+  return isAdmin();
 }
 function openMemberModal(memberId){
   if(memberId && !canEditMember(memberId)){ showToast('คุณไม่มีสิทธิ์แก้ไขข้อมูลสมาชิกคนนี้', true); return; }
@@ -875,12 +873,15 @@ function saveMember(){
 }
 function deleteMember(id){
   if(!isAdmin()){ showToast('เฉพาะผู้ดูแลระบบเท่านั้นที่ลบข้อมูลได้', true); return; }
-  if(!confirm('ยืนยันการลบสมาชิกนี้? ประวัติการทำรายการทั้งหมดของสมาชิกจะถูกลบด้วย')) return;
+  if(!confirm('ยืนยันการลบสมาชิกนี้? ประวัติการทำรายการและสินเชื่อทั้งหมดของสมาชิกจะถูกลบด้วย')) return;
   const relatedDepositIds = state.deposits.filter(d=>d.memberId===id).map(d=>d.id);
+  const relatedLoanIds = state.loans.filter(l=>l.memberId===id).map(l=>l.id);
   state.members = state.members.filter(m=>m.id!==id);
   state.deposits = state.deposits.filter(d=>d.memberId!==id);
+  state.loans = state.loans.filter(l=>l.memberId!==id);
   refMembers.child(id).remove().catch(err=>showToast('ลบไม่สำเร็จ: '+err.message, true));
   relatedDepositIds.forEach(depId => refDeposits.child(depId).remove());
+  relatedLoanIds.forEach(loanId => refLoans.child(loanId).remove());
   showToast('ลบสมาชิกสำเร็จ');
   navigate('members');
 }
@@ -895,6 +896,7 @@ function renderMemberDetail(){
     return;
   }
   const history = state.deposits.filter(d=>d.memberId===m.id).sort((a,b)=>b.createdAt-a.createdAt);
+  const loans = state.loans.filter(l=>l.memberId===m.id).sort((a,b)=>b.createdAt-a.createdAt);
   main.innerHTML = `
     <div class="page-header">
       <div>
@@ -924,15 +926,27 @@ function renderMemberDetail(){
     <div class="panel">
       <div class="panel-head"><h3>ประวัติการทำรายการ</h3></div>
       <div class="panel-body">
-        ${history.length ? `<table><thead><tr><th>วันที่</th><th>ประเภท</th><th>จำนวนเงิน</th><th>สถานะ</th><th>หมายเหตุ</th></tr></thead><tbody>
+        ${history.length ? `<table><thead><tr><th>วันที่</th><th>ประเภท</th><th>จำนวนเงิน</th><th>หมายเหตุ</th></tr></thead><tbody>
           ${history.map(d=>`<tr>
             <td data-label="วันที่">${fmtDate(d.date)}</td>
             <td data-label="ประเภท">${typeBadge(typeOf(d))}</td>
             <td data-label="จำนวนเงิน" class="num">${amountDisplay(d)}</td>
-            <td data-label="สถานะ">${statusBadge(statusOf(d))}</td>
             <td data-label="หมายเหตุ">${escapeHtml(d.note)||'-'}</td>
           </tr>`).join('')}
         </tbody></table>` : `<div class="empty-state"><div class="e-ico">📭</div>ยังไม่มีประวัติการทำรายการ</div>`}
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h3>สินเชื่อ</h3><span class="link-btn" onclick="navigate('loan')">ไปหน้าสินเชื่อ →</span></div>
+      <div class="panel-body">
+        ${loans.length ? `<table><thead><tr><th>วันที่</th><th>เงินต้น</th><th>คงเหลือ</th><th>สถานะ</th></tr></thead><tbody>
+          ${loans.map(l=>`<tr>
+            <td data-label="วันที่">${fmtDate(l.date)}</td>
+            <td data-label="เงินต้น" class="num">${fmtMoney(l.principal)} ฿</td>
+            <td data-label="คงเหลือ" class="num">${l.status==='active'?fmtMoney(loanOutstanding(l))+' ฿':'-'}</td>
+            <td data-label="สถานะ">${loanStatusBadge(l.status)}</td>
+          </tr>`).join('')}
+        </tbody></table>` : `<div class="empty-state"><div class="e-ico">💳</div>ยังไม่มีสินเชื่อ</div>`}
       </div>
     </div>
     ${memberModalHTML()}
@@ -943,7 +957,6 @@ function renderMemberDetail(){
 function statusOf(d){ return d.status || 'approved'; }
 function typeOf(d){ return d.type || 'deposit'; }
 function typeBadge(type){
-  if(type==='dividend') return `<span class="badge" style="background:#fdeacb; color:#8a5a00;">🎁 ปันผล</span>`;
   if(type==='withdraw') return `<span class="badge" style="background:var(--danger-bg); color:var(--danger);">💸 ถอนเงิน</span>`;
   return `<span class="badge badge-gray">ฝากเงิน</span>`;
 }
@@ -957,43 +970,19 @@ function amountDisplay(d){
   return `${fmtMoney(d.amount)} ฿`;
 }
 function renderDeposit(){
-  if(isAdmin()) renderDepositAdmin(); else renderDepositUser();
-}
-
-/* --- Admin: approve/reject queue + direct entry (auto-approved) --- */
-function renderDepositAdmin(){
-  const pending = state.deposits.filter(d=>typeOf(d)==='deposit' && statusOf(d)==='pending').sort((a,b)=>a.createdAt-b.createdAt);
+  if(!isAdmin()){
+    document.getElementById('mainContent').innerHTML = `<div class="empty-state"><div class="e-ico">🔒</div>เฉพาะผู้ดูแลระบบเท่านั้นที่เข้าถึงหน้านี้ได้</div>`;
+    return;
+  }
   const options = state.members.map(m=>`<option value="${m.id}">${escapeHtml(m.code)} — ${escapeHtml(m.name)}</option>`).join('');
 
   document.getElementById('mainContent').innerHTML = `
     <div class="page-header">
-      <div><h1 class="page-title">ฝากเงิน</h1><div class="page-title-sub">ยืนยันคำขอฝากเงินของสมาชิก หรือบันทึกฝากเงินโดยตรง</div></div>
+      <div><h1 class="page-title">ฝากเงิน</h1><div class="page-title-sub">บันทึกการฝากเงินให้สมาชิก</div></div>
     </div>
     <hr class="page-divider">
 
     <div class="panel">
-      <div class="panel-head"><h3>คำขอฝากเงินรออนุมัติ</h3><span class="badge badge-gray">${pending.length.toLocaleString('th-TH')} รายการ</span></div>
-      <div class="panel-body">
-        ${pending.length ? `<table><thead><tr><th>วันที่</th><th>สมาชิก</th><th>จำนวนเงิน</th><th>หมายเหตุ</th><th></th></tr></thead><tbody>
-          ${pending.map(d=>{
-            const m = state.members.find(x=>x.id===d.memberId);
-            return `<tr>
-              <td data-label="วันที่">${fmtDate(d.date)}</td>
-              <td data-label="สมาชิก">${escapeHtml(m?m.name:'(ลบแล้ว)')}</td>
-              <td data-label="จำนวนเงิน" class="num">${fmtMoney(d.amount)} ฿</td>
-              <td data-label="หมายเหตุ">${escapeHtml(d.note)||'-'}</td>
-              <td class="no-label" style="text-align:right; white-space:nowrap;">
-                <button class="btn btn-primary btn-sm" style="width:auto;" onclick="approveDeposit('${d.id}')">✓ อนุมัติ</button>
-                <button class="btn btn-danger btn-sm" style="width:auto;" onclick="rejectDeposit('${d.id}')">✕ ปฏิเสธ</button>
-              </td>
-            </tr>`;
-          }).join('')}
-        </tbody></table>` : `<div class="empty-state"><div class="e-ico">✅</div>ไม่มีคำขอฝากเงินที่รออนุมัติ</div>`}
-      </div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-head"><h3>บันทึกการฝากให้สมาชิก (ยืนยันทันที)</h3></div>
       <div class="panel-body" style="padding-top:16px;">
         ${state.members.length ? `
         <div class="field"><label>เลือกสมาชิก</label>
@@ -1033,136 +1022,24 @@ function saveDepositDirect(){
   refDeposits.child(depositRecord.id).set(depositRecord).catch(err=>showToast('บันทึกไม่สำเร็จ: '+err.message, true));
 
   showToast(`บันทึกการฝากเงิน ${fmtMoney(amount)} ฿ ให้ ${m.name} สำเร็จ`);
-  renderDepositAdmin();
-}
-function approveDeposit(depId){
-  const d = state.deposits.find(x=>x.id===depId);
-  if(!d || statusOf(d)!=='pending' || typeOf(d)!=='deposit') return;
-  const m = state.members.find(x=>x.id===d.memberId);
-  if(!m){ showToast('ไม่พบสมาชิกของรายการนี้', true); return; }
-  const newBalance = Number(m.balance||0) + Number(d.amount||0);
-  const newCount = Number(m.depositCount||0) + 1;
-  m.balance = newBalance;
-  m.depositCount = newCount;
-  d.status = 'approved';
-
-  refMembers.child(m.id).update({balance:newBalance, depositCount:newCount}).catch(err=>showToast('อัปเดตไม่สำเร็จ: '+err.message, true));
-  refDeposits.child(depId).update({status:'approved'}).catch(err=>showToast('อัปเดตไม่สำเร็จ: '+err.message, true));
-  showToast(`อนุมัติการฝากเงิน ${fmtMoney(d.amount)} ฿ ของ ${m.name} สำเร็จ`);
-  renderDepositAdmin();
-}
-function rejectDeposit(depId){
-  const d = state.deposits.find(x=>x.id===depId);
-  if(!d || statusOf(d)!=='pending' || typeOf(d)!=='deposit') return;
-  if(!confirm('ยืนยันการปฏิเสธคำขอฝากเงินนี้?')) return;
-  d.status = 'rejected';
-  refDeposits.child(depId).update({status:'rejected'}).catch(err=>showToast('อัปเดตไม่สำเร็จ: '+err.message, true));
-  showToast('ปฏิเสธคำขอฝากเงินแล้ว');
-  renderDepositAdmin();
-}
-
-/* --- User (member): request a deposit for their own account --- */
-function renderDepositUser(){
-  const u = currentUser();
-  const m = state.members.find(x=>x.id===u.memberId);
-  const main = document.getElementById('mainContent');
-  if(!m){
-    main.innerHTML = `<div class="empty-state"><div class="e-ico">❓</div>ไม่พบข้อมูลสมาชิกที่ผูกกับบัญชีนี้ กรุณาติดต่อผู้ดูแลระบบ</div>`;
-    return;
-  }
-  const myRequests = state.deposits.filter(d=>d.memberId===m.id && typeOf(d)==='deposit').sort((a,b)=>b.createdAt-a.createdAt).slice(0,10);
-
-  main.innerHTML = `
-    <div class="page-header">
-      <div><h1 class="page-title">ฝากเงิน</h1><div class="page-title-sub">แจ้งฝากเงินเข้าบัญชีของคุณ — ยอดจะอัปเดตหลังผู้ดูแลระบบยืนยัน</div></div>
-    </div>
-    <hr class="page-divider">
-    <div class="grid-cards" style="grid-template-columns:repeat(2,1fr); max-width:520px;">
-      <div class="card"><div class="card-label">ยอดเงินสะสมของฉัน</div><div class="card-value small">${fmtMoney(m.balance)} ฿</div></div>
-      <div class="card"><div class="card-label">รหัสสมาชิก</div><div class="card-value small">${m.code}</div></div>
-    </div>
-    <div class="panel" style="max-width:520px;">
-      <div class="panel-body" style="padding-top:16px;">
-        <div class="row-2">
-          <div class="field"><label>วันที่</label><input type="date" id="depDate" value="${todayISO()}"></div>
-          <div class="field"><label>จำนวนเงิน (บาท)</label><input type="number" id="depAmount" min="0" step="0.01" placeholder="0.00"></div>
-        </div>
-        <div class="field"><label>หมายเหตุ</label><input id="depNote" placeholder="ไม่บังคับ"></div>
-        <button class="btn btn-primary" onclick="saveDepositRequest()">📤 ส่งคำขอฝากเงิน</button>
-      </div>
-    </div>
-    <div class="panel" style="max-width:520px;">
-      <div class="panel-head"><h3>คำขอล่าสุดของฉัน</h3></div>
-      <div class="panel-body">
-        ${myRequests.length ? `<table><thead><tr><th>วันที่</th><th>จำนวนเงิน</th><th>สถานะ</th></tr></thead><tbody>
-          ${myRequests.map(d=>`<tr>
-            <td data-label="วันที่">${fmtDate(d.date)}</td>
-            <td data-label="จำนวนเงิน" class="num">${fmtMoney(d.amount)} ฿</td>
-            <td data-label="สถานะ">${statusBadge(statusOf(d))}</td>
-          </tr>`).join('')}
-        </tbody></table>` : `<div class="empty-state"><div class="e-ico">📭</div>ยังไม่มีคำขอฝากเงิน</div>`}
-      </div>
-    </div>
-  `;
-}
-function saveDepositRequest(){
-  const u = currentUser();
-  const m = state.members.find(x=>x.id===u.memberId);
-  if(!m){ showToast('ไม่พบข้อมูลสมาชิกของคุณ', true); return; }
-  const date = document.getElementById('depDate').value || todayISO();
-  const amount = parseFloat(document.getElementById('depAmount').value);
-  const note = document.getElementById('depNote').value.trim();
-  if(!amount || amount<=0){ showToast('กรุณากรอกจำนวนเงินให้ถูกต้อง', true); return; }
-
-  const depositRecord = {id:uid('dep_'), memberId:m.id, date, amount, note, status:'pending', createdAt:Date.now()};
-  state.deposits.push(depositRecord);
-  refDeposits.child(depositRecord.id).set(depositRecord).catch(err=>showToast('ส่งคำขอไม่สำเร็จ: '+err.message, true));
-
-  showToast('ส่งคำขอฝากเงินสำเร็จ กำลังรอผู้ดูแลระบบยืนยัน');
-  renderDepositUser();
+  renderDeposit();
 }
 
 /* ================= WITHDRAW ================= */
 function renderWithdraw(){
-  if(isAdmin()) renderWithdrawAdmin(); else renderWithdrawUser();
-}
-
-/* --- Admin: approve/reject queue + direct entry (auto-approved) --- */
-function renderWithdrawAdmin(){
-  const pending = state.deposits.filter(d=>typeOf(d)==='withdraw' && statusOf(d)==='pending').sort((a,b)=>a.createdAt-b.createdAt);
+  if(!isAdmin()){
+    document.getElementById('mainContent').innerHTML = `<div class="empty-state"><div class="e-ico">🔒</div>เฉพาะผู้ดูแลระบบเท่านั้นที่เข้าถึงหน้านี้ได้</div>`;
+    return;
+  }
   const options = state.members.map(m=>`<option value="${m.id}">${escapeHtml(m.code)} — ${escapeHtml(m.name)} (คงเหลือ ${fmtMoney(m.balance)} ฿)</option>`).join('');
 
   document.getElementById('mainContent').innerHTML = `
     <div class="page-header">
-      <div><h1 class="page-title">ถอนเงิน</h1><div class="page-title-sub">ยืนยันคำขอถอนเงินของสมาชิก หรือบันทึกถอนเงินโดยตรง</div></div>
+      <div><h1 class="page-title">ถอนเงิน</h1><div class="page-title-sub">บันทึกการถอนเงินให้สมาชิก</div></div>
     </div>
     <hr class="page-divider">
 
     <div class="panel">
-      <div class="panel-head"><h3>คำขอถอนเงินรออนุมัติ</h3><span class="badge badge-gray">${pending.length.toLocaleString('th-TH')} รายการ</span></div>
-      <div class="panel-body">
-        ${pending.length ? `<table><thead><tr><th>วันที่</th><th>สมาชิก</th><th>จำนวนเงิน</th><th>ยอดคงเหลือ</th><th>หมายเหตุ</th><th></th></tr></thead><tbody>
-          ${pending.map(d=>{
-            const m = state.members.find(x=>x.id===d.memberId);
-            const insufficient = m && Number(d.amount||0) > Number(m.balance||0);
-            return `<tr>
-              <td data-label="วันที่">${fmtDate(d.date)}</td>
-              <td data-label="สมาชิก">${escapeHtml(m?m.name:'(ลบแล้ว)')}</td>
-              <td data-label="จำนวนเงิน" class="num">${fmtMoney(d.amount)} ฿</td>
-              <td data-label="ยอดคงเหลือ" class="num">${m?fmtMoney(m.balance)+' ฿':'-'}${insufficient?' <span style="color:var(--danger); font-size:12px;">(ไม่พอ)</span>':''}</td>
-              <td data-label="หมายเหตุ">${escapeHtml(d.note)||'-'}</td>
-              <td class="no-label" style="text-align:right; white-space:nowrap;">
-                <button class="btn btn-primary btn-sm" style="width:auto;" onclick="approveWithdraw('${d.id}')">✓ อนุมัติ</button>
-                <button class="btn btn-danger btn-sm" style="width:auto;" onclick="rejectWithdraw('${d.id}')">✕ ปฏิเสธ</button>
-              </td>
-            </tr>`;
-          }).join('')}
-        </tbody></table>` : `<div class="empty-state"><div class="e-ico">✅</div>ไม่มีคำขอถอนเงินที่รออนุมัติ</div>`}
-      </div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-head"><h3>บันทึกการถอนให้สมาชิก (ยืนยันทันที)</h3></div>
       <div class="panel-body" style="padding-top:16px;">
         ${state.members.length ? `
         <div class="field"><label>เลือกสมาชิก</label>
@@ -1202,93 +1079,7 @@ function saveWithdrawDirect(){
   refDeposits.child(withdrawRecord.id).set(withdrawRecord).catch(err=>showToast('บันทึกไม่สำเร็จ: '+err.message, true));
 
   showToast(`บันทึกการถอนเงิน ${fmtMoney(amount)} ฿ ของ ${m.name} สำเร็จ`);
-  renderWithdrawAdmin();
-}
-function approveWithdraw(depId){
-  const d = state.deposits.find(x=>x.id===depId);
-  if(!d || statusOf(d)!=='pending' || typeOf(d)!=='withdraw') return;
-  const m = state.members.find(x=>x.id===d.memberId);
-  if(!m){ showToast('ไม่พบสมาชิกของรายการนี้', true); return; }
-  if(Number(d.amount||0) > Number(m.balance||0)){ showToast(`ยอดเงินสะสมของ ${m.name} ไม่เพียงพอสำหรับการถอนนี้ (คงเหลือ ${fmtMoney(m.balance)} ฿)`, true); return; }
-  const newBalance = Number(m.balance||0) - Number(d.amount||0);
-  m.balance = newBalance;
-  d.status = 'approved';
-
-  refMembers.child(m.id).update({balance:newBalance}).catch(err=>showToast('อัปเดตไม่สำเร็จ: '+err.message, true));
-  refDeposits.child(depId).update({status:'approved'}).catch(err=>showToast('อัปเดตไม่สำเร็จ: '+err.message, true));
-  showToast(`อนุมัติการถอนเงิน ${fmtMoney(d.amount)} ฿ ของ ${m.name} สำเร็จ`);
-  renderWithdrawAdmin();
-}
-function rejectWithdraw(depId){
-  const d = state.deposits.find(x=>x.id===depId);
-  if(!d || statusOf(d)!=='pending' || typeOf(d)!=='withdraw') return;
-  if(!confirm('ยืนยันการปฏิเสธคำขอถอนเงินนี้?')) return;
-  d.status = 'rejected';
-  refDeposits.child(depId).update({status:'rejected'}).catch(err=>showToast('อัปเดตไม่สำเร็จ: '+err.message, true));
-  showToast('ปฏิเสธคำขอถอนเงินแล้ว');
-  renderWithdrawAdmin();
-}
-
-/* --- User (member): request a withdrawal from their own account --- */
-function renderWithdrawUser(){
-  const u = currentUser();
-  const m = state.members.find(x=>x.id===u.memberId);
-  const main = document.getElementById('mainContent');
-  if(!m){
-    main.innerHTML = `<div class="empty-state"><div class="e-ico">❓</div>ไม่พบข้อมูลสมาชิกที่ผูกกับบัญชีนี้ กรุณาติดต่อผู้ดูแลระบบ</div>`;
-    return;
-  }
-  const myRequests = state.deposits.filter(d=>d.memberId===m.id && typeOf(d)==='withdraw').sort((a,b)=>b.createdAt-a.createdAt).slice(0,10);
-
-  main.innerHTML = `
-    <div class="page-header">
-      <div><h1 class="page-title">ถอนเงิน</h1><div class="page-title-sub">แจ้งถอนเงินจากบัญชีของคุณ — ยอดจะอัปเดตหลังผู้ดูแลระบบยืนยัน</div></div>
-    </div>
-    <hr class="page-divider">
-    <div class="grid-cards" style="grid-template-columns:repeat(2,1fr); max-width:520px;">
-      <div class="card"><div class="card-label">ยอดเงินสะสมของฉัน</div><div class="card-value small">${fmtMoney(m.balance)} ฿</div></div>
-      <div class="card"><div class="card-label">รหัสสมาชิก</div><div class="card-value small">${m.code}</div></div>
-    </div>
-    <div class="panel" style="max-width:520px;">
-      <div class="panel-body" style="padding-top:16px;">
-        <div class="row-2">
-          <div class="field"><label>วันที่</label><input type="date" id="wdDate" value="${todayISO()}"></div>
-          <div class="field"><label>จำนวนเงิน (บาท)</label><input type="number" id="wdAmount" min="0" step="0.01" placeholder="0.00"></div>
-        </div>
-        <div class="field"><label>หมายเหตุ</label><input id="wdNote" placeholder="ไม่บังคับ"></div>
-        <button class="btn btn-primary" onclick="saveWithdrawRequest()">📤 ส่งคำขอถอนเงิน</button>
-      </div>
-    </div>
-    <div class="panel" style="max-width:520px;">
-      <div class="panel-head"><h3>คำขอล่าสุดของฉัน</h3></div>
-      <div class="panel-body">
-        ${myRequests.length ? `<table><thead><tr><th>วันที่</th><th>จำนวนเงิน</th><th>สถานะ</th></tr></thead><tbody>
-          ${myRequests.map(d=>`<tr>
-            <td data-label="วันที่">${fmtDate(d.date)}</td>
-            <td data-label="จำนวนเงิน" class="num">${fmtMoney(d.amount)} ฿</td>
-            <td data-label="สถานะ">${statusBadge(statusOf(d))}</td>
-          </tr>`).join('')}
-        </tbody></table>` : `<div class="empty-state"><div class="e-ico">📭</div>ยังไม่มีคำขอถอนเงิน</div>`}
-      </div>
-    </div>
-  `;
-}
-function saveWithdrawRequest(){
-  const u = currentUser();
-  const m = state.members.find(x=>x.id===u.memberId);
-  if(!m){ showToast('ไม่พบข้อมูลสมาชิกของคุณ', true); return; }
-  const date = document.getElementById('wdDate').value || todayISO();
-  const amount = parseFloat(document.getElementById('wdAmount').value);
-  const note = document.getElementById('wdNote').value.trim();
-  if(!amount || amount<=0){ showToast('กรุณากรอกจำนวนเงินให้ถูกต้อง', true); return; }
-  if(amount > Number(m.balance||0)){ showToast(`ยอดเงินสะสมของคุณไม่เพียงพอ (คงเหลือ ${fmtMoney(m.balance)} ฿)`, true); return; }
-
-  const withdrawRecord = {id:uid('wd_'), memberId:m.id, date, amount, note, type:'withdraw', status:'pending', createdAt:Date.now()};
-  state.deposits.push(withdrawRecord);
-  refDeposits.child(withdrawRecord.id).set(withdrawRecord).catch(err=>showToast('ส่งคำขอไม่สำเร็จ: '+err.message, true));
-
-  showToast('ส่งคำขอถอนเงินสำเร็จ กำลังรอผู้ดูแลระบบยืนยัน');
-  renderWithdrawUser();
+  renderWithdraw();
 }
 
 
@@ -1316,13 +1107,12 @@ function renderHistory(){
         <div class="search-box"><span>🔍</span><input placeholder="${isAdminView?'ค้นหาชื่อสมาชิก หรือ วันที่ (เช่น 2026-07)':'ค้นหาวันที่ (เช่น 2026-07)'}" value="${escapeHtml(historySearch)}" oninput="historySearch=this.value; renderHistory();"></div>
       </div>
       <div class="panel-body">
-        ${rows.length ? `<table><thead><tr><th>วันที่</th>${isAdminView?'<th>สมาชิก</th>':''}<th>ประเภท</th><th>จำนวนเงิน</th><th>สถานะ</th><th>หมายเหตุ</th></tr></thead><tbody>
+        ${rows.length ? `<table><thead><tr><th>วันที่</th>${isAdminView?'<th>สมาชิก</th>':''}<th>ประเภท</th><th>จำนวนเงิน</th><th>หมายเหตุ</th></tr></thead><tbody>
           ${rows.map(d=>`<tr>
             <td data-label="วันที่">${fmtDate(d.date)}</td>
             ${isAdminView?`<td data-label="สมาชิก">${escapeHtml(d.member?d.member.name:'(ลบแล้ว)')}</td>`:''}
             <td data-label="ประเภท">${typeBadge(typeOf(d))}</td>
             <td data-label="จำนวนเงิน" class="num">${amountDisplay(d)}</td>
-            <td data-label="สถานะ">${statusBadge(statusOf(d))}</td>
             <td data-label="หมายเหตุ">${escapeHtml(d.note)||'-'}</td>
           </tr>`).join('')}
         </tbody></table>` : `<div class="empty-state"><div class="e-ico">🔎</div>ไม่พบรายการที่ค้นหา</div>`}
@@ -1336,6 +1126,8 @@ function renderReports(){
   const totalBalance = state.members.reduce((s,m)=>s+Number(m.balance||0),0);
   const approvedDeposits = state.deposits.filter(d=>statusOf(d)==='approved');
   const totalWithdrawn = approvedDeposits.filter(d=>typeOf(d)==='withdraw').reduce((s,d)=>s+Number(d.amount||0),0);
+  const activeLoans = state.loans.filter(l=>l.status==='active');
+  const totalLoanOutstanding = activeLoans.reduce((s,l)=>s+loanOutstanding(l),0);
   const monthly = {};
   approvedDeposits.forEach(d=>{
     const ym = (d.date||'').slice(0,7);
@@ -1352,9 +1144,10 @@ function renderReports(){
       <button class="btn btn-outline" style="width:auto;" onclick="exportExcel()">⬇ Export Excel</button>
     </div>
     <hr class="page-divider">
-    <div class="grid-cards" style="grid-template-columns:repeat(4,1fr);">
+    <div class="grid-cards" style="grid-template-columns:repeat(5,1fr);">
       <div class="card"><div class="card-label">ยอดคงเหลือรวมทั้งหมด</div><div class="card-value small">${fmtMoney(totalBalance)} ฿</div></div>
       <div class="card"><div class="card-label">ยอดถอนเงินรวมทั้งหมด</div><div class="card-value small">${fmtMoney(totalWithdrawn)} ฿</div></div>
+      <div class="card"><div class="card-label">ยอดสินเชื่อคงค้างรวม</div><div class="card-value small">${fmtMoney(totalLoanOutstanding)} ฿</div></div>
       <div class="card"><div class="card-label">จำนวนสมาชิกทั้งหมด</div><div class="card-value">${state.members.length.toLocaleString('th-TH')}</div></div>
       <div class="card"><div class="card-label">สมาชิกยอดฝากสูงสุด</div><div class="card-value small">${topMember?escapeHtml(topMember.name):'-'}</div></div>
     </div>
@@ -1384,13 +1177,22 @@ function exportExcel(){
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(memberRows), 'สมาชิก');
 
   const statusLabel = {pending:'รออนุมัติ', approved:'อนุมัติแล้ว', rejected:'ถูกปฏิเสธ'};
-  const typeLabel = {deposit:'ฝากเงิน', dividend:'ปันผล', withdraw:'ถอนเงิน'};
+  const typeLabel = {deposit:'ฝากเงิน', withdraw:'ถอนเงิน'};
   const depRows = state.deposits.map(d=>{
     const m = state.members.find(x=>x.id===d.memberId);
     return {'วันที่':d.date, 'รหัสสมาชิก':m?m.code:'', 'ชื่อสมาชิก':m?m.name:'(ลบแล้ว)', 'ประเภท':typeLabel[typeOf(d)], 'จำนวนเงิน':Number(d.amount||0), 'สถานะ':statusLabel[statusOf(d)], 'หมายเหตุ':d.note};
   });
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(depRows), 'ประวัติการทำรายการ');
 
+  const loanStatusLabel = {pending:'รออนุมัติ', active:'กำลังผ่อนชำระ', rejected:'ถูกปฏิเสธ', paid:'ชำระครบแล้ว'};
+  const loanRows = state.loans.map(l=>{
+    const m = state.members.find(x=>x.id===l.memberId);
+    return {'วันที่':l.date, 'รหัสสมาชิก':m?m.code:'', 'ชื่อสมาชิก':m?m.name:'(ลบแล้ว)', 'เงินต้น':Number(l.principal||0), 'ดอกเบี้ย (%)':Number(l.interestRate||0), 'ยอดต้องชำระ':loanTotalDue(l), 'ชำระแล้ว':loanPaid(l), 'คงเหลือ':loanOutstanding(l), 'สถานะ':loanStatusLabel[l.status]||l.status, 'หมายเหตุ':l.note};
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(loanRows), 'สินเชื่อ');
+
+  const activeLoans = state.loans.filter(l=>l.status==='active');
+  const totalLoanOutstanding = activeLoans.reduce((s,l)=>s+loanOutstanding(l),0);
   const approvedDeposits = state.deposits.filter(d=>statusOf(d)==='approved');
   const totalWithdrawn = approvedDeposits.filter(d=>typeOf(d)==='withdraw').reduce((s,d)=>s+Number(d.amount||0),0);
   const monthly = {};
@@ -1402,6 +1204,7 @@ function exportExcel(){
   const summaryRows = [
     {'รายการ':'ยอดคงเหลือรวมทั้งหมด', 'จำนวน':state.members.reduce((s,m)=>s+Number(m.balance||0),0)},
     {'รายการ':'ยอดถอนเงินรวมทั้งหมด', 'จำนวน':totalWithdrawn},
+    {'รายการ':'ยอดสินเชื่อคงค้างรวม', 'จำนวน':totalLoanOutstanding},
     {'รายการ':'จำนวนสมาชิกทั้งหมด', 'จำนวน':state.members.length},
     ...Object.keys(monthly).sort().flatMap(ym=>([
       {'รายการ':'ยอดฝากเข้าเดือน '+ym, 'จำนวน':monthly[ym].in},
@@ -1414,147 +1217,233 @@ function exportExcel(){
   showToast('Export ไฟล์ Excel สำเร็จ');
 }
 
-/* ================= DIVIDEND ================= */
-let pendingDividendPreview = null;
-let pendingDividendMeta = null;
+/* ================= LOAN ================= */
+function loanStatusBadge(status){
+  if(status==='pending') return `<span class="badge" style="background:#fff2d9; color:#9a6b00;">รออนุมัติ</span>`;
+  if(status==='active') return `<span class="badge" style="background:#dbeafe; color:#1d4ed8;">กำลังผ่อนชำระ</span>`;
+  if(status==='rejected') return `<span class="badge" style="background:var(--danger-bg); color:var(--danger);">ถูกปฏิเสธ</span>`;
+  if(status==='paid') return `<span class="badge badge-green">ชำระครบแล้ว</span>`;
+  return `<span class="badge badge-gray">${status}</span>`;
+}
+function loanTotalDue(l){ return Number(l.principal||0) + Number(l.principal||0)*Number(l.interestRate||0)/100; }
+function loanPaid(l){ return (l.repayments||[]).reduce((s,r)=>s+Number(r.amount||0),0); }
+function loanOutstanding(l){ return Math.max(0, Math.round((loanTotalDue(l) - loanPaid(l))*100)/100); }
 
-function renderDividend(){
-  if(!isAdmin()){
-    document.getElementById('mainContent').innerHTML = `<div class="empty-state"><div class="e-ico">🔒</div>เฉพาะผู้ดูแลระบบเท่านั้นที่เข้าถึงหน้านี้ได้</div>`;
-    return;
-  }
-  pendingDividendPreview = null;
-  pendingDividendMeta = null;
+function renderLoan(){
+  if(isAdmin()) renderLoanAdmin(); else renderLoanUser();
+}
 
-  const rounds = {};
-  state.deposits.filter(d=>typeOf(d)==='dividend').forEach(d=>{
-    const rid = d.roundId || d.id;
-    if(!rounds[rid]) rounds[rid] = {roundId:rid, date:d.date, note:d.note, total:0, count:0, createdAt:d.createdAt};
-    rounds[rid].total += Number(d.amount||0);
-    rounds[rid].count += 1;
-    rounds[rid].createdAt = Math.max(rounds[rid].createdAt, d.createdAt);
-  });
-  const roundList = Object.values(rounds).sort((a,b)=>b.createdAt-a.createdAt);
+/* --- Admin: review requests, manage active loans, record repayments --- */
+function renderLoanAdmin(){
+  const pending = state.loans.filter(l=>l.status==='pending').sort((a,b)=>a.createdAt-b.createdAt);
+  const active = state.loans.filter(l=>l.status==='active').sort((a,b)=>b.createdAt-a.createdAt);
+  const closed = state.loans.filter(l=>l.status==='paid'||l.status==='rejected').sort((a,b)=>b.createdAt-a.createdAt);
+  const options = state.members.map(m=>`<option value="${m.id}">${escapeHtml(m.code)} — ${escapeHtml(m.name)}</option>`).join('');
+  const memberName = id => { const m=state.members.find(x=>x.id===id); return m?m.name:'(ลบแล้ว)'; };
 
   document.getElementById('mainContent').innerHTML = `
     <div class="page-header">
-      <div><h1 class="page-title">ปันผล</h1><div class="page-title-sub">คำนวณและจ่ายเงินปันผลให้สมาชิกตามยอดเงินสะสม</div></div>
+      <div><h1 class="page-title">สินเชื่อ</h1><div class="page-title-sub">อนุมัติคำขอกู้ยืม บันทึกการชำระ หรือปล่อยสินเชื่อโดยตรง</div></div>
     </div>
     <hr class="page-divider">
 
-    <div class="panel" style="max-width:560px;">
-      <div class="panel-head"><h3>จ่ายเงินปันผลรอบใหม่</h3></div>
-      <div class="panel-body" style="padding-top:16px;">
-        <div class="row-2">
-          <div class="field"><label>วันที่ปันผล</label><input type="date" id="divDate" value="${todayISO()}"></div>
-          <div class="field"><label>วิธีคำนวณ</label>
-            <select id="divMode" onchange="updateDivModeLabel()">
-              <option value="rate">อัตราร้อยละของยอดเงินสะสม (%)</option>
-              <option value="fixed">กำหนดยอดเงินรวม แบ่งตามสัดส่วนยอดคงเหลือ</option>
-            </select>
-          </div>
-        </div>
-        <div class="field">
-          <label id="divValueLabel">อัตราปันผล (%)</label>
-          <input type="number" id="divValue" min="0" step="0.01" placeholder="เช่น 2.5">
-        </div>
-        <div class="field"><label>หมายเหตุ</label><input id="divNote" placeholder="เช่น ปันผลประจำปี 2569"></div>
-        <button class="btn btn-outline" onclick="previewDividend()">🔍 คำนวณตัวอย่าง</button>
-        <div id="dividendPreviewArea" style="margin-top:16px;"></div>
+    <div class="panel">
+      <div class="panel-head"><h3>คำขอกู้ยืมรออนุมัติ</h3><span class="badge badge-gray">${pending.length.toLocaleString('th-TH')} รายการ</span></div>
+      <div class="panel-body">
+        ${pending.length ? `<table><thead><tr><th>วันที่ขอ</th><th>สมาชิก</th><th>จำนวนเงิน</th><th>หมายเหตุ</th><th>อัตราดอกเบี้ย (%)</th><th></th></tr></thead><tbody>
+          ${pending.map(l=>`<tr>
+            <td data-label="วันที่ขอ">${fmtDate(l.date)}</td>
+            <td data-label="สมาชิก">${escapeHtml(memberName(l.memberId))}</td>
+            <td data-label="จำนวนเงิน" class="num">${fmtMoney(l.principal)} ฿</td>
+            <td data-label="หมายเหตุ">${escapeHtml(l.note)||'-'}</td>
+            <td data-label="อัตราดอกเบี้ย (%)"><input type="number" id="rate_${l.id}" min="0" step="0.01" placeholder="0" style="width:90px;"></td>
+            <td class="no-label" style="text-align:right; white-space:nowrap;">
+              <button class="btn btn-primary btn-sm" style="width:auto;" onclick="approveLoan('${l.id}')">✓ อนุมัติ</button>
+              <button class="btn btn-danger btn-sm" style="width:auto;" onclick="rejectLoan('${l.id}')">✕ ปฏิเสธ</button>
+            </td>
+          </tr>`).join('')}
+        </tbody></table>` : `<div class="empty-state"><div class="e-ico">✅</div>ไม่มีคำขอกู้ยืมที่รออนุมัติ</div>`}
       </div>
     </div>
 
     <div class="panel">
-      <div class="panel-head"><h3>ประวัติการปันผลที่ผ่านมา</h3></div>
+      <div class="panel-head"><h3>สินเชื่อที่กำลังผ่อนชำระ</h3><span class="badge badge-gray">${active.length.toLocaleString('th-TH')} รายการ</span></div>
       <div class="panel-body">
-        ${roundList.length ? `<table><thead><tr><th>วันที่</th><th>สมาชิกที่ได้รับ</th><th>ยอดรวมที่จ่าย</th><th>หมายเหตุ</th><th></th></tr></thead><tbody>
-          ${roundList.map(r=>`<tr>
-            <td data-label="วันที่">${fmtDate(r.date)}</td>
-            <td data-label="สมาชิกที่ได้รับ">${r.count.toLocaleString('th-TH')} คน</td>
-            <td data-label="ยอดรวมที่จ่าย" class="num">${fmtMoney(r.total)} ฿</td>
-            <td data-label="หมายเหตุ">${escapeHtml(r.note)||'-'}</td>
-            <td class="no-label" style="text-align:right;"><span class="link-btn" onclick="historySearch='${r.date}'; navigate('history');">ดูรายการ →</span></td>
+        ${active.length ? `<table><thead><tr><th>สมาชิก</th><th>เงินต้น</th><th>ดอกเบี้ย</th><th>ยอดต้องชำระ</th><th>ชำระแล้ว</th><th>คงเหลือ</th><th>บันทึกชำระ</th></tr></thead><tbody>
+          ${active.map(l=>`<tr>
+            <td data-label="สมาชิก">${escapeHtml(memberName(l.memberId))}</td>
+            <td data-label="เงินต้น" class="num">${fmtMoney(l.principal)} ฿</td>
+            <td data-label="ดอกเบี้ย" class="num">${Number(l.interestRate||0)}%</td>
+            <td data-label="ยอดต้องชำระ" class="num">${fmtMoney(loanTotalDue(l))} ฿</td>
+            <td data-label="ชำระแล้ว" class="num">${fmtMoney(loanPaid(l))} ฿</td>
+            <td data-label="คงเหลือ" class="num" style="font-weight:600;">${fmtMoney(loanOutstanding(l))} ฿</td>
+            <td class="no-label" style="white-space:nowrap;">
+              <input type="number" id="repay_${l.id}" min="0" step="0.01" placeholder="จำนวนเงิน" style="width:110px; display:inline-block;">
+              <button class="btn btn-outline btn-sm" style="width:auto;" onclick="recordRepayment('${l.id}')">💾 บันทึก</button>
+            </td>
           </tr>`).join('')}
-        </tbody></table>` : `<div class="empty-state"><div class="e-ico">🎁</div>ยังไม่มีการจ่ายปันผล</div>`}
+        </tbody></table>` : `<div class="empty-state"><div class="e-ico">💳</div>ยังไม่มีสินเชื่อที่กำลังผ่อนชำระ</div>`}
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>ปล่อยสินเชื่อให้สมาชิกโดยตรง (อนุมัติทันที)</h3></div>
+      <div class="panel-body" style="padding-top:16px;">
+        ${state.members.length ? `
+        <div class="field"><label>เลือกสมาชิก</label>
+          <select id="loanMemberId">
+            <option value="">-- เลือกสมาชิก --</option>
+            ${options}
+          </select>
+        </div>
+        <div class="row-2">
+          <div class="field"><label>วันที่</label><input type="date" id="loanDate" value="${todayISO()}"></div>
+          <div class="field"><label>จำนวนเงินต้น (บาท)</label><input type="number" id="loanPrincipal" min="0" step="0.01" placeholder="0.00"></div>
+        </div>
+        <div class="row-2">
+          <div class="field"><label>อัตราดอกเบี้ย (%)</label><input type="number" id="loanRate" min="0" step="0.01" placeholder="0"></div>
+          <div class="field"><label>หมายเหตุ</label><input id="loanNote" placeholder="ไม่บังคับ"></div>
+        </div>
+        <button class="btn btn-primary" onclick="saveLoanDirect()">💾 บันทึกการปล่อยสินเชื่อ</button>
+        ` : `<div class="empty-state"><div class="e-ico">👥</div>ยังไม่มีสมาชิกในระบบ</div>`}
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3>ประวัติสินเชื่อที่ปิดแล้ว</h3></div>
+      <div class="panel-body">
+        ${closed.length ? `<table><thead><tr><th>สมาชิก</th><th>เงินต้น</th><th>ยอดต้องชำระ</th><th>สถานะ</th></tr></thead><tbody>
+          ${closed.map(l=>`<tr>
+            <td data-label="สมาชิก">${escapeHtml(memberName(l.memberId))}</td>
+            <td data-label="เงินต้น" class="num">${fmtMoney(l.principal)} ฿</td>
+            <td data-label="ยอดต้องชำระ" class="num">${fmtMoney(loanTotalDue(l))} ฿</td>
+            <td data-label="สถานะ">${loanStatusBadge(l.status)}</td>
+          </tr>`).join('')}
+        </tbody></table>` : `<div class="empty-state"><div class="e-ico">📭</div>ยังไม่มีสินเชื่อที่ปิดแล้ว</div>`}
       </div>
     </div>
   `;
 }
-function updateDivModeLabel(){
-  const mode = document.getElementById('divMode').value;
-  document.getElementById('divValueLabel').textContent = mode==='rate' ? 'อัตราปันผล (%)' : 'ยอดเงินรวมที่จะแบ่งปันผล (บาท)';
-  document.getElementById('divValue').placeholder = mode==='rate' ? 'เช่น 2.5' : 'เช่น 50000';
+function saveLoanDirect(){
+  const memberId = document.getElementById('loanMemberId').value;
+  const date = document.getElementById('loanDate').value || todayISO();
+  const principal = parseFloat(document.getElementById('loanPrincipal').value);
+  const interestRate = parseFloat(document.getElementById('loanRate').value) || 0;
+  const note = document.getElementById('loanNote').value.trim();
+  if(!memberId){ showToast('กรุณาเลือกสมาชิก', true); return; }
+  if(!principal || principal<=0){ showToast('กรุณากรอกจำนวนเงินต้นให้ถูกต้อง', true); return; }
+
+  const m = state.members.find(x=>x.id===memberId);
+  const loanRecord = {id:uid('loan_'), memberId, date, principal, interestRate, note, status:'active', repayments:[], createdAt:Date.now(), approvedAt:Date.now()};
+  state.loans.push(loanRecord);
+  refLoans.child(loanRecord.id).set(loanRecord).catch(err=>showToast('บันทึกไม่สำเร็จ: '+err.message, true));
+
+  showToast(`บันทึกการปล่อยสินเชื่อ ${fmtMoney(principal)} ฿ ให้ ${m.name} สำเร็จ`);
+  renderLoanAdmin();
 }
-function previewDividend(){
-  const date = document.getElementById('divDate').value || todayISO();
-  const mode = document.getElementById('divMode').value;
-  const value = parseFloat(document.getElementById('divValue').value);
-  const note = document.getElementById('divNote').value.trim();
-  const area = document.getElementById('dividendPreviewArea');
+function approveLoan(loanId){
+  const l = state.loans.find(x=>x.id===loanId);
+  if(!l || l.status!=='pending') return;
+  const rateInput = document.getElementById('rate_'+loanId);
+  const interestRate = rateInput ? (parseFloat(rateInput.value)||0) : 0;
+  l.status = 'active';
+  l.interestRate = interestRate;
+  l.approvedAt = Date.now();
+  refLoans.child(loanId).update({status:'active', interestRate, approvedAt:l.approvedAt}).catch(err=>showToast('อัปเดตไม่สำเร็จ: '+err.message, true));
+  showToast('อนุมัติคำขอกู้ยืมสำเร็จ');
+  renderLoanAdmin();
+}
+function rejectLoan(loanId){
+  const l = state.loans.find(x=>x.id===loanId);
+  if(!l || l.status!=='pending') return;
+  if(!confirm('ยืนยันการปฏิเสธคำขอกู้ยืมนี้?')) return;
+  l.status = 'rejected';
+  refLoans.child(loanId).update({status:'rejected'}).catch(err=>showToast('อัปเดตไม่สำเร็จ: '+err.message, true));
+  showToast('ปฏิเสธคำขอกู้ยืมแล้ว');
+  renderLoanAdmin();
+}
+function recordRepayment(loanId){
+  const l = state.loans.find(x=>x.id===loanId);
+  if(!l || l.status!=='active') return;
+  const input = document.getElementById('repay_'+loanId);
+  const amount = parseFloat(input ? input.value : '');
+  if(!amount || amount<=0){ showToast('กรุณากรอกจำนวนเงินให้ถูกต้อง', true); return; }
+  const outstanding = loanOutstanding(l);
+  if(amount > outstanding + 0.01){ showToast(`ยอดชำระเกินยอดคงเหลือ (คงเหลือ ${fmtMoney(outstanding)} ฿)`, true); return; }
 
-  if(!value || value<=0){ showToast('กรุณากรอกตัวเลขให้ถูกต้อง', true); return; }
-  const eligible = state.members.filter(m => Number(m.balance||0) > 0);
-  if(!eligible.length){ showToast('ไม่มีสมาชิกที่มียอดเงินสะสมมากกว่า 0', true); return; }
+  if(!l.repayments) l.repayments = [];
+  const repayment = {id:uid('rp_'), date:todayISO(), amount, createdAt:Date.now()};
+  l.repayments.push(repayment);
+  const newOutstanding = loanOutstanding(l);
+  if(newOutstanding <= 0) l.status = 'paid';
 
-  const totalBalance = eligible.reduce((s,m)=>s+Number(m.balance||0),0);
-  let entries;
-  if(mode==='rate'){
-    entries = eligible.map(m => ({m, amount: Math.round(Number(m.balance||0) * value/100 * 100)/100}));
-  }else{
-    entries = eligible.map(m => ({m, amount: Math.round((Number(m.balance||0)/totalBalance) * value * 100)/100}));
+  refLoans.child(loanId).update({repayments:l.repayments, status:l.status}).catch(err=>showToast('บันทึกไม่สำเร็จ: '+err.message, true));
+  showToast(`บันทึกการชำระ ${fmtMoney(amount)} ฿ สำเร็จ`);
+  renderLoanAdmin();
+}
+
+/* --- User (member): request a loan, view own loans --- */
+function renderLoanUser(){
+  const u = currentUser();
+  const m = state.members.find(x=>x.id===u.memberId);
+  const main = document.getElementById('mainContent');
+  if(!m){
+    main.innerHTML = `<div class="empty-state"><div class="e-ico">❓</div>ไม่พบข้อมูลสมาชิกที่ผูกกับบัญชีนี้ กรุณาติดต่อผู้ดูแลระบบ</div>`;
+    return;
   }
-  entries = entries.filter(e => e.amount > 0);
-  const total = entries.reduce((s,e)=>s+e.amount,0);
+  const myLoans = state.loans.filter(l=>l.memberId===m.id).sort((a,b)=>b.createdAt-a.createdAt);
+  const totalOutstanding = myLoans.filter(l=>l.status==='active').reduce((s,l)=>s+loanOutstanding(l),0);
 
-  pendingDividendPreview = entries;
-  pendingDividendMeta = {date, mode, value, note};
-
-  area.innerHTML = `
-    <div style="border:1.5px dashed var(--border); border-radius:10px; padding:14px; margin-top:6px;">
-      <div style="font-size:13.8px; font-weight:600; margin-bottom:10px;">ตัวอย่างการจ่ายปันผล — ${entries.length.toLocaleString('th-TH')} คน รวม ${fmtMoney(total)} ฿</div>
-      <div style="max-height:280px; overflow-y:auto;">
-        <table><thead><tr><th>สมาชิก</th><th>ยอดก่อน</th><th>ปันผลที่ได้</th></tr></thead><tbody>
-          ${entries.map(e=>`<tr>
-            <td data-label="สมาชิก">${escapeHtml(e.m.name)}</td>
-            <td data-label="ยอดก่อน" class="num">${fmtMoney(e.m.balance)} ฿</td>
-            <td data-label="ปันผลที่ได้" class="num">+${fmtMoney(e.amount)} ฿</td>
-          </tr>`).join('')}
-        </tbody></table>
+  main.innerHTML = `
+    <div class="page-header">
+      <div><h1 class="page-title">สินเชื่อ</h1><div class="page-title-sub">ขอกู้ยืมจากกองทุน — จะได้รับเงินหลังผู้ดูแลระบบอนุมัติ</div></div>
+    </div>
+    <hr class="page-divider">
+    <div class="grid-cards" style="grid-template-columns:repeat(2,1fr); max-width:520px;">
+      <div class="card"><div class="card-label">ยอดหนี้คงเหลือของฉัน</div><div class="card-value small">${fmtMoney(totalOutstanding)} ฿</div></div>
+      <div class="card"><div class="card-label">รหัสสมาชิก</div><div class="card-value small">${m.code}</div></div>
+    </div>
+    <div class="panel" style="max-width:520px;">
+      <div class="panel-head"><h3>ขอกู้ยืมใหม่</h3></div>
+      <div class="panel-body" style="padding-top:16px;">
+        <div class="row-2">
+          <div class="field"><label>วันที่</label><input type="date" id="loanDate" value="${todayISO()}"></div>
+          <div class="field"><label>จำนวนเงินที่ต้องการกู้ (บาท)</label><input type="number" id="loanPrincipal" min="0" step="0.01" placeholder="0.00"></div>
+        </div>
+        <div class="field"><label>หมายเหตุ / วัตถุประสงค์</label><input id="loanNote" placeholder="ไม่บังคับ"></div>
+        <button class="btn btn-primary" onclick="saveLoanRequest()">📤 ส่งคำขอกู้ยืม</button>
       </div>
-      <div style="display:flex; gap:10px; margin-top:14px;">
-        <button class="btn btn-primary" style="width:auto;" onclick="confirmDividend()">✓ ยืนยันจ่ายปันผล</button>
-        <button class="btn btn-ghost" onclick="document.getElementById('dividendPreviewArea').innerHTML=''; pendingDividendPreview=null;">ยกเลิก</button>
+    </div>
+    <div class="panel" style="max-width:520px;">
+      <div class="panel-head"><h3>สินเชื่อของฉัน</h3></div>
+      <div class="panel-body">
+        ${myLoans.length ? `<table><thead><tr><th>วันที่</th><th>เงินต้น</th><th>คงเหลือ</th><th>สถานะ</th></tr></thead><tbody>
+          ${myLoans.map(l=>`<tr>
+            <td data-label="วันที่">${fmtDate(l.date)}</td>
+            <td data-label="เงินต้น" class="num">${fmtMoney(l.principal)} ฿</td>
+            <td data-label="คงเหลือ" class="num">${l.status==='active'?fmtMoney(loanOutstanding(l))+' ฿':'-'}</td>
+            <td data-label="สถานะ">${loanStatusBadge(l.status)}</td>
+          </tr>`).join('')}
+        </tbody></table>` : `<div class="empty-state"><div class="e-ico">📭</div>ยังไม่มีคำขอกู้ยืม</div>`}
       </div>
     </div>
   `;
 }
-function confirmDividend(){
-  if(!pendingDividendPreview || !pendingDividendPreview.length){ showToast('กรุณาคำนวณตัวอย่างก่อน', true); return; }
-  if(!confirm(`ยืนยันจ่ายเงินปันผลให้สมาชิก ${pendingDividendPreview.length} คน?`)) return;
+function saveLoanRequest(){
+  const u = currentUser();
+  const m = state.members.find(x=>x.id===u.memberId);
+  if(!m){ showToast('ไม่พบข้อมูลสมาชิกของคุณ', true); return; }
+  const date = document.getElementById('loanDate').value || todayISO();
+  const principal = parseFloat(document.getElementById('loanPrincipal').value);
+  const note = document.getElementById('loanNote').value.trim();
+  if(!principal || principal<=0){ showToast('กรุณากรอกจำนวนเงินให้ถูกต้อง', true); return; }
 
-  const roundId = uid('divround_');
-  const meta = pendingDividendMeta;
-  const defaultNote = meta.note || (meta.mode==='rate' ? `ปันผล ${meta.value}%` : 'ปันผลกองทุน');
-  const updates = {};
-  let totalDistributed = 0;
+  const loanRecord = {id:uid('loan_'), memberId:m.id, date, principal, interestRate:0, note, status:'pending', repayments:[], createdAt:Date.now()};
+  state.loans.push(loanRecord);
+  refLoans.child(loanRecord.id).set(loanRecord).catch(err=>showToast('ส่งคำขอไม่สำเร็จ: '+err.message, true));
 
-  pendingDividendPreview.forEach(({m, amount})=>{
-    const newBalance = Number(m.balance||0) + amount;
-    const depId = uid('div_');
-    const depRecord = {id:depId, memberId:m.id, date:meta.date, amount, note:defaultNote, type:'dividend', status:'approved', roundId, createdAt:Date.now()};
-    updates['deposits/'+depId] = depRecord;
-    updates['members/'+m.id+'/balance'] = newBalance;
-    m.balance = newBalance;
-    state.deposits.push(depRecord);
-    totalDistributed += amount;
-  });
-
-  db.ref().update(updates).catch(err=>showToast('บันทึกปันผลไม่สำเร็จบางส่วน: '+err.message, true));
-
-  showToast(`จ่ายเงินปันผลรวม ${fmtMoney(totalDistributed)} ฿ ให้สมาชิก ${pendingDividendPreview.length} คน สำเร็จ`);
-  pendingDividendPreview = null;
-  pendingDividendMeta = null;
-  renderDividend();
+  showToast('ส่งคำขอกู้ยืมสำเร็จ กำลังรอผู้ดูแลระบบอนุมัติ');
+  renderLoanUser();
 }
 
 /* ================= SETTINGS ================= */
@@ -1648,10 +1537,14 @@ function renderSettingsUsers(){
     <div class="panel">
       <div class="panel-head"><h3>รายชื่อผู้ใช้งาน</h3><button class="btn btn-primary btn-sm" style="width:auto;" onclick="openUserModal()">+ เพิ่มผู้ใช้งาน</button></div>
       <div class="panel-body">
-        <table><thead><tr><th>ชื่อผู้ใช้</th><th>ชื่อที่แสดง</th><th>ระดับสิทธิ์</th><th></th></tr></thead><tbody>
+        <table><thead><tr><th>ชื่อผู้ใช้</th><th>ชื่อที่แสดง</th><th>รหัสผ่าน</th><th>ระดับสิทธิ์</th><th></th></tr></thead><tbody>
           ${state.users.map(u=>`<tr>
             <td data-label="ชื่อผู้ใช้">${escapeHtml(u.username)}</td>
             <td data-label="ชื่อที่แสดง">${escapeHtml(u.displayName||'-')}</td>
+            <td data-label="รหัสผ่าน" style="white-space:nowrap;">
+              <span id="pass_${escapeHtml(u.username)}" data-hidden="true" style="font-family:monospace; letter-spacing:1px;">••••••••</span>
+              <span class="link-btn" style="margin-left:6px;" onclick="togglePasswordVisibility('${escapeHtml(u.username)}')">👁</span>
+            </td>
             <td data-label="ระดับสิทธิ์"><span class="badge ${u.role==='Admin'?'badge-green':'badge-gray'}">${u.role==='Admin'?'Admin':'User'}</span></td>
             <td class="no-label" style="text-align:right;">
               ${state.users.length>1 ? `<span class="link-btn" style="color:var(--danger);" onclick="deleteUser('${u.username}')">ลบ</span>` : ''}
@@ -1662,6 +1555,19 @@ function renderSettingsUsers(){
     </div>
     ${userModalHTML()}
   `;
+}
+function togglePasswordVisibility(username){
+  const el = document.getElementById('pass_'+username);
+  if(!el) return;
+  const u = state.users.find(x=>x.username===username);
+  if(!u) return;
+  if(el.dataset.hidden === 'false'){
+    el.textContent = '••••••••';
+    el.dataset.hidden = 'true';
+  }else{
+    el.textContent = u.password;
+    el.dataset.hidden = 'false';
+  }
 }
 function userModalHTML(){
   return `
